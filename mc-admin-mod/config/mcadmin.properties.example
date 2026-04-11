@@ -1,0 +1,15 @@
+# MC Admin Mod 配置文件
+
+# WebSocket 连接配置
+ws.url=ws://localhost:8080/ws
+ws.token=test_token_123
+
+# 服务器标识
+server.id=srv_001
+
+# 状态上报间隔（毫秒）
+status.report_interval=5000
+
+# 安全设置
+# 危险操作是否需要二次确认
+security.require_confirmation=true
