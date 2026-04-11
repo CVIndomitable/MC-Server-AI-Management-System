@@ -1,7 +1,12 @@
 import { create } from 'zustand';
+import { v4 as uuidv4 } from 'uuid';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ServerStatus, ChatMessage } from '../types';
 import apiService from '../services/api';
 import wsService from '../services/websocket';
+
+const TOKEN_KEY = '@mc_admin_token';
+const SERVER_ID_KEY = '@mc_admin_server_id';
 
 interface AppState {
   // 认证状态
@@ -18,6 +23,10 @@ interface AppState {
   // UI状态
   isLoading: boolean;
   error: string | null;
+  wsConnected: boolean;
+
+  // WebSocket消息处理器引用
+  wsMessageHandler: ((message: any) => void) | null;
 
   // Actions
   login: (username: string, password: string) => Promise<boolean>;
@@ -29,6 +38,7 @@ interface AppState {
   connectWebSocket: () => void;
   disconnectWebSocket: () => void;
   setError: (error: string | null) => void;
+  restoreSession: () => Promise<void>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -39,6 +49,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   chatMessages: [],
   isLoading: false,
   error: null,
+  wsConnected: false,
+  wsMessageHandler: null,
 
   login: async (username: string, password: string) => {
     set({ isLoading: true, error: null });
@@ -48,6 +60,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (result.success && result.data) {
       const { token } = result.data;
       apiService.setToken(token);
+
+      // 持久化token
+      await AsyncStorage.setItem(TOKEN_KEY, token);
+
       set({
         isAuthenticated: true,
         token,
@@ -69,6 +85,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   logout: () => {
     get().disconnectWebSocket();
     apiService.clearToken();
+
+    // 清除持久化数据
+    AsyncStorage.removeItem(TOKEN_KEY);
+
     set({
       isAuthenticated: false,
       token: null,
@@ -96,7 +116,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     // 添加用户消息
     const userMessage: ChatMessage = {
-      id: Date.now().toString(),
+      id: uuidv4(),
       role: 'user',
       content,
       timestamp: Date.now(),
@@ -112,7 +132,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     } else {
       // 添加错误消息
       const errorMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
+        id: uuidv4(),
         role: 'assistant',
         content: `错误: ${result.error}`,
         timestamp: Date.now(),
@@ -124,33 +144,76 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   connectWebSocket: () => {
-    const { token, serverId, updateServerStatus, addChatMessage } = get();
+    const { token, serverId, updateServerStatus, addChatMessage, wsMessageHandler } = get();
 
     if (!token) return;
 
+    // 清理旧的处理器
+    if (wsMessageHandler) {
+      wsService.removeMessageHandler(wsMessageHandler);
+    }
+
     wsService.connect(token, serverId);
 
-    // 注册消息处理器
-    wsService.addMessageHandler((message) => {
+    // 创建并保存新的消息处理器
+    const handler = (message: any) => {
       if (message.type === 'status' && message.data) {
         updateServerStatus(message.data);
       } else if (message.type === 'chat_response' && message.message) {
         const chatMessage: ChatMessage = {
-          id: Date.now().toString(),
+          id: uuidv4(),
           role: 'assistant',
           content: message.message,
           timestamp: Date.now(),
         };
         addChatMessage(chatMessage);
       }
-    });
+    };
+
+    // 注册状态处理器
+    const statusHandler = (connected: boolean) => {
+      set({ wsConnected: connected });
+    };
+
+    wsService.addMessageHandler(handler);
+    wsService.addStatusHandler(statusHandler);
+    set({ wsMessageHandler: handler });
   },
 
   disconnectWebSocket: () => {
+    const { wsMessageHandler } = get();
+
+    // 清理消息处理器
+    if (wsMessageHandler) {
+      wsService.removeMessageHandler(wsMessageHandler);
+      set({ wsMessageHandler: null });
+    }
+
     wsService.disconnect();
   },
 
   setError: (error: string | null) => {
     set({ error });
+  },
+
+  restoreSession: async () => {
+    try {
+      const token = await AsyncStorage.getItem(TOKEN_KEY);
+      const serverId = await AsyncStorage.getItem(SERVER_ID_KEY);
+
+      if (token) {
+        apiService.setToken(token);
+        set({
+          isAuthenticated: true,
+          token,
+          serverId: serverId || 'srv_001',
+        });
+
+        // 恢复会话后连接WebSocket
+        get().connectWebSocket();
+      }
+    } catch (error) {
+      console.error('恢复会话失败:', error);
+    }
   },
 }));

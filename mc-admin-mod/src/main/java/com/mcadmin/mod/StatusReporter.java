@@ -1,5 +1,6 @@
 package com.mcadmin.mod;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -13,16 +14,17 @@ import java.util.TimerTask;
 
 public class StatusReporter {
     private static final Logger LOGGER = LoggerFactory.getLogger(StatusReporter.class);
-    private static final long REPORT_INTERVAL = 5000; // 5秒上报一次
 
     private final MinecraftServer server;
     private final Timer timer;
     private final List<String> recentErrors;
+    private final long reportInterval;
 
     public StatusReporter(MinecraftServer server) {
         this.server = server;
         this.timer = new Timer("MCAdmin-StatusReporter", true);
         this.recentErrors = new ArrayList<>();
+        this.reportInterval = Config.getReportInterval();
         startReporting();
     }
 
@@ -32,8 +34,8 @@ public class StatusReporter {
             public void run() {
                 reportStatus();
             }
-        }, 0, REPORT_INTERVAL);
-        LOGGER.info("Status reporter started");
+        }, 0, reportInterval);
+        LOGGER.info("Status reporter started with interval {}ms", reportInterval);
     }
 
     private void reportStatus() {
@@ -58,18 +60,18 @@ public class StatusReporter {
     private JsonObject collectStatus() {
         JsonObject data = new JsonObject();
 
-        // TPS 计算
-        double tps = Math.min(20.0, server.getAverageTickTime() > 0 ?
-            1000.0 / server.getAverageTickTime() : 20.0);
+        // TPS 计算 (getAverageTickTime返回纳秒)
+        double avgTickTimeMs = server.getAverageTickTime() / 1_000_000.0;
+        double tps = Math.min(20.0, avgTickTimeMs > 0 ? 1000.0 / avgTickTimeMs : 20.0);
         data.addProperty("tps", Math.round(tps * 10.0) / 10.0);
 
         // 在线玩家列表
-        List<String> playerNames = new ArrayList<>();
+        JsonArray playerArray = new JsonArray();
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            playerNames.add(player.getName().getString());
+            playerArray.add(player.getName().getString());
         }
-        data.addProperty("players", String.join(",", playerNames));
-        data.addProperty("player_count", playerNames.size());
+        data.add("players", playerArray);
+        data.addProperty("player_count", playerArray.size());
         data.addProperty("max_players", server.getMaxPlayers());
 
         // 内存占用
@@ -89,8 +91,7 @@ public class StatusReporter {
     }
 
     private String getServerId() {
-        // 从配置文件读取，暂时硬编码
-        return "srv_001";
+        return Config.getServerId();
     }
 
     public void addError(String error) {

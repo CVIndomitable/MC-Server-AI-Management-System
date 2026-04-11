@@ -1,6 +1,9 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from app.websocket.manager import manager
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -20,7 +23,8 @@ async def mod_websocket(
             message = json.loads(data)
             await manager.handle_message(server_id, message)
     except WebSocketDisconnect:
-        manager.disconnect(server_id)
+        logger.info(f"WebSocket disconnected for {server_id}")
+        await manager.disconnect(server_id)
     except Exception as e:
-        print(f"WebSocket error for {server_id}: {e}")
-        manager.disconnect(server_id)
+        logger.error(f"WebSocket error for {server_id}: {e}", exc_info=True)
+        await manager.disconnect(server_id)

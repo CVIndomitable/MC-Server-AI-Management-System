@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   TextInput,
@@ -15,6 +15,16 @@ import { ChatMessage } from '../types';
 export default function ChatScreen() {
   const [inputText, setInputText] = useState('');
   const { chatMessages, sendMessage, isLoading } = useAppStore();
+  const flatListRef = useRef<FlatList>(null);
+
+  // 新消息到达时自动滚动到底部
+  useEffect(() => {
+    if (chatMessages.length > 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [chatMessages]);
 
   const handleSend = async () => {
     if (!inputText.trim() || isLoading) return;
@@ -48,6 +58,7 @@ export default function ChatScreen() {
       keyboardVerticalOffset={90}
     >
       <FlatList
+        ref={flatListRef}
         data={chatMessages}
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}

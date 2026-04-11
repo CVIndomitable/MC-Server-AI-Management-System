@@ -1,14 +1,20 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
 import { useAppStore } from '../services/store';
 import { LineChart } from 'react-native-chart-kit';
 
 export default function StatusScreen() {
-  const { serverStatus } = useAppStore();
+  const { serverStatus, wsConnected } = useAppStore();
 
   if (!serverStatus) {
     return (
       <View style={styles.container}>
+        <View style={styles.connectionStatus}>
+          <View style={[styles.statusDot, wsConnected ? styles.connected : styles.disconnected]} />
+          <Text style={styles.statusText}>
+            {wsConnected ? '已连接' : '未连接'}
+          </Text>
+        </View>
         <Text style={styles.noDataText}>暂无服务器数据</Text>
       </View>
     );
@@ -19,6 +25,14 @@ export default function StatusScreen() {
 
   return (
     <ScrollView style={styles.container}>
+      {/* 连接状态指示器 */}
+      <View style={styles.connectionStatus}>
+        <View style={[styles.statusDot, wsConnected ? styles.connected : styles.disconnected]} />
+        <Text style={styles.statusText}>
+          {wsConnected ? '实时连接' : '连接断开'}
+        </Text>
+      </View>
+
       {/* TPS显示 */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>服务器性能</Text>
@@ -84,6 +98,31 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1a1a1a',
+  },
+  connectionStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    backgroundColor: '#2a2a2a',
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 8,
+  },
+  connected: {
+    backgroundColor: '#4CAF50',
+  },
+  disconnected: {
+    backgroundColor: '#F44336',
+  },
+  statusText: {
+    color: '#aaa',
+    fontSize: 14,
   },
   card: {
     backgroundColor: '#2a2a2a',

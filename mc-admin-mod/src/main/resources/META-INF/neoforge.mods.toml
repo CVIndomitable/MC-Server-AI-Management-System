@@ -1,4 +1,4 @@
-modLoader="javafml"
+modLoader="neoforged"
 loaderVersion="${loader_version_range}"
 license="MIT"
 

@@ -13,34 +13,39 @@ import java.util.TimerTask;
 
 public class WebSocketManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(WebSocketManager.class);
-    private static final String WS_URL = "ws://localhost:8080/ws"; // 从配置读取
-    private static final String AUTH_TOKEN = "test_token_123"; // 从配置读取
     private static final long RECONNECT_DELAY = 5000; // 5秒后重连
+    private static final long HEARTBEAT_INTERVAL = 30000; // 30秒心跳
 
     private WebSocketClient client;
     private final CommandExecutor commandExecutor;
     private final StatusReporter statusReporter;
-    private final Timer reconnectTimer;
+    private Timer reconnectTimer;
+    private Timer heartbeatTimer;
     private boolean shouldReconnect = true;
 
     public WebSocketManager(CommandExecutor commandExecutor, StatusReporter statusReporter) {
         this.commandExecutor = commandExecutor;
         this.statusReporter = statusReporter;
-        this.reconnectTimer = new Timer("MCAdmin-Reconnect", true);
     }
 
     public void connect() {
         try {
-            URI uri = new URI(WS_URL);
+            String wsUrl = Config.getWsUrl();
+            String authToken = Config.getAuthToken();
+
+            URI uri = new URI(wsUrl);
             client = new WebSocketClient(uri) {
                 @Override
                 public void onOpen(ServerHandshake handshake) {
-                    LOGGER.info("WebSocket connected to {}", WS_URL);
+                    LOGGER.info("WebSocket connected to {}", wsUrl);
                     // 发送认证消息
                     JsonObject auth = new JsonObject();
                     auth.addProperty("type", "auth");
-                    auth.addProperty("token", AUTH_TOKEN);
+                    auth.addProperty("token", authToken);
                     send(auth.toString());
+
+                    // 启动心跳
+                    startHeartbeat();
                 }
 
                 @Override
@@ -51,6 +56,7 @@ public class WebSocketManager {
                 @Override
                 public void onClose(int code, String reason, boolean remote) {
                     LOGGER.warn("WebSocket closed: {} - {}", code, reason);
+                    stopHeartbeat();
                     scheduleReconnect();
                 }
 
@@ -84,6 +90,9 @@ public class WebSocketManager {
                         LOGGER.error("Authentication failed");
                         disconnect();
                     }
+                    break;
+                case "pong":
+                    // 心跳响应
                     break;
                 default:
                     LOGGER.warn("Unknown message type: {}", type);
@@ -127,6 +136,12 @@ public class WebSocketManager {
     private void scheduleReconnect() {
         if (!shouldReconnect) return;
 
+        // 取消旧的重连定时器
+        if (reconnectTimer != null) {
+            reconnectTimer.cancel();
+        }
+
+        reconnectTimer = new Timer("MCAdmin-Reconnect", true);
         LOGGER.info("Scheduling reconnect in {} ms", RECONNECT_DELAY);
         reconnectTimer.schedule(new TimerTask() {
             @Override
@@ -139,12 +154,40 @@ public class WebSocketManager {
         }, RECONNECT_DELAY);
     }
 
+    private void startHeartbeat() {
+        stopHeartbeat();
+        heartbeatTimer = new Timer("MCAdmin-Heartbeat", true);
+        heartbeatTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                if (client != null && client.isOpen()) {
+                    JsonObject ping = new JsonObject();
+                    ping.addProperty("type", "ping");
+                    ping.addProperty("timestamp", System.currentTimeMillis());
+                    sendMessage(ping.toString());
+                }
+            }
+        }, HEARTBEAT_INTERVAL, HEARTBEAT_INTERVAL);
+        LOGGER.debug("Heartbeat started");
+    }
+
+    private void stopHeartbeat() {
+        if (heartbeatTimer != null) {
+            heartbeatTimer.cancel();
+            heartbeatTimer = null;
+        }
+    }
+
     public void disconnect() {
         shouldReconnect = false;
+        stopHeartbeat();
+        if (reconnectTimer != null) {
+            reconnectTimer.cancel();
+            reconnectTimer = null;
+        }
         if (client != null) {
             client.close();
         }
-        reconnectTimer.cancel();
         LOGGER.info("WebSocket disconnected");
     }
 }

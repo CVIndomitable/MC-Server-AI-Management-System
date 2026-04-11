@@ -90,6 +90,7 @@ TOOLS = [
 class AIAgent:
     def __init__(self):
         self.conversation_history: Dict[str, List[Dict]] = {}
+        self.max_history_length = 50
 
     async def process_message(self, user_message: str, server_id: str, current_status: dict = None) -> Dict[str, Any]:
         if server_id not in self.conversation_history:
@@ -100,6 +101,7 @@ class AIAgent:
             user_msg["content"] += f"\n\n当前服务器状态：{json.dumps(current_status, ensure_ascii=False)}"
 
         self.conversation_history[server_id].append(user_msg)
+        self._trim_history(server_id)
 
         response = client.messages.create(
             model=settings.model_name,
@@ -130,7 +132,11 @@ class AIAgent:
         return result
 
     def add_tool_result(self, server_id: str, tool_use_id: str, result: str):
-        if server_id in self.conversation_history:
+        if server_id not in self.conversation_history or not self.conversation_history[server_id]:
+            return
+
+        last_msg = self.conversation_history[server_id][-1]
+        if last_msg["role"] != "user":
             self.conversation_history[server_id].append({
                 "role": "user",
                 "content": [{
@@ -139,5 +145,17 @@ class AIAgent:
                     "content": result
                 }]
             })
+        else:
+            if not isinstance(last_msg["content"], list):
+                last_msg["content"] = [{"type": "text", "text": last_msg["content"]}]
+            last_msg["content"].append({
+                "type": "tool_result",
+                "tool_use_id": tool_use_id,
+                "content": result
+            })
+
+    def _trim_history(self, server_id: str):
+        if len(self.conversation_history[server_id]) > self.max_history_length:
+            self.conversation_history[server_id] = self.conversation_history[server_id][-self.max_history_length:]
 
 ai_agent = AIAgent()

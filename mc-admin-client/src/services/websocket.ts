@@ -2,12 +2,14 @@ import { CONFIG } from '../utils/config';
 import { WSMessage } from '../types';
 
 type MessageHandler = (message: WSMessage) => void;
+type ConnectionStatusHandler = (connected: boolean) => void;
 
 class WebSocketService {
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private messageHandlers: Set<MessageHandler> = new Set();
+  private statusHandlers: Set<ConnectionStatusHandler> = new Set();
   private isIntentionallyClosed = false;
 
   connect(token: string, serverId: string) {
@@ -16,14 +18,21 @@ class WebSocketService {
     }
 
     this.isIntentionallyClosed = false;
-    const wsUrl = `${CONFIG.wsUrl}?token=${token}&server_id=${serverId}`;
+    const wsUrl = CONFIG.wsUrl;
 
     try {
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
-        console.log('WebSocket连接成功');
+        console.log('WebSocket连接成功，发送认证信息');
+        // 连接后发送认证消息
+        this.send({
+          type: 'auth',
+          token,
+          server_id: serverId,
+        } as any);
         this.reconnectAttempts = 0;
+        this.notifyStatusHandlers(true);
       };
 
       this.ws.onmessage = (event) => {
@@ -42,6 +51,7 @@ class WebSocketService {
       this.ws.onclose = () => {
         console.log('WebSocket连接关闭');
         this.ws = null;
+        this.notifyStatusHandlers(false);
 
         if (!this.isIntentionallyClosed) {
           this.scheduleReconnect(token, serverId);
@@ -87,6 +97,7 @@ class WebSocketService {
     }
 
     this.reconnectAttempts = 0;
+    this.notifyStatusHandlers(false);
   }
 
   send(message: WSMessage) {
@@ -105,12 +116,30 @@ class WebSocketService {
     this.messageHandlers.delete(handler);
   }
 
+  addStatusHandler(handler: ConnectionStatusHandler) {
+    this.statusHandlers.add(handler);
+  }
+
+  removeStatusHandler(handler: ConnectionStatusHandler) {
+    this.statusHandlers.delete(handler);
+  }
+
   private notifyHandlers(message: WSMessage) {
     this.messageHandlers.forEach(handler => {
       try {
         handler(message);
       } catch (error) {
         console.error('消息处理器执行失败:', error);
+      }
+    });
+  }
+
+  private notifyStatusHandlers(connected: boolean) {
+    this.statusHandlers.forEach(handler => {
+      try {
+        handler(connected);
+      } catch (error) {
+        console.error('状态处理器执行失败:', error);
       }
     });
   }

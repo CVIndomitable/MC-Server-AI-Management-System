@@ -50,7 +50,7 @@ server.id=srv_001
   "timestamp": 1700000000,
   "data": {
     "tps": 19.8,
-    "players": "Steve,Alex",
+    "players": ["Steve", "Alex"],
     "player_count": 2,
     "max_players": 20,
     "memory_used_mb": 2048,
