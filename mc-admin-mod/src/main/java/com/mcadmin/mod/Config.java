@@ -89,7 +89,12 @@ public class Config {
     }
 
     public static long getReportInterval() {
-        return Long.parseLong(props.getProperty("status.report_interval", "5000"));
+        try {
+            return Long.parseLong(props.getProperty("status.report_interval", "5000"));
+        } catch (NumberFormatException e) {
+            LOGGER.warn("Invalid report_interval config, using default 5000ms");
+            return 5000L;
+        }
     }
 
     public static boolean requireConfirmation() {

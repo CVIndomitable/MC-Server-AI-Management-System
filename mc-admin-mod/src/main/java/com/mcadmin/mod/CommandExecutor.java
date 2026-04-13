@@ -11,14 +11,16 @@ import java.io.File;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 
 public class CommandExecutor {
     private static final Logger LOGGER = LoggerFactory.getLogger(CommandExecutor.class);
 
     private final MinecraftServer server;
-    private final Set<String> allowedCommands;
-    private final Set<String> dangerousCommands;
+    // 使用 volatile + 原子替换引用，保证跨线程读写安全
+    private volatile Set<String> allowedCommands;
+    private volatile Set<String> dangerousCommands;
 
     public CommandExecutor(MinecraftServer server) {
         this.server = server;
@@ -30,10 +32,10 @@ public class CommandExecutor {
 
     /**
      * 动态更新命令白名单（由服务器下发）
+     * 原子替换引用，避免 clear()+addAll() 窗口期的竞态
      */
     public void updateAllowedCommands(Set<String> commands) {
-        allowedCommands.clear();
-        allowedCommands.addAll(commands);
+        this.allowedCommands = new HashSet<>(commands);
         LOGGER.info("Command whitelist updated: {}", allowedCommands);
     }
 
@@ -96,6 +98,11 @@ public class CommandExecutor {
     }
 
     private void executeMinecraftCommand(JsonObject payload, BiConsumer<Boolean, String> callback) {
+        if (!payload.has("command") || payload.get("command").isJsonNull()) {
+            callback.accept(false, "Missing 'command' in payload");
+            return;
+        }
+
         String command = payload.get("command").getAsString();
 
         // 移除开头的 /
@@ -103,20 +110,30 @@ public class CommandExecutor {
             command = command.substring(1);
         }
 
-        // 检查命令白名单
+        // 检查命令白名单（读取 volatile 引用的快照）
+        Set<String> currentAllowed = allowedCommands;
         String baseCommand = command.split(" ")[0];
-        if (!allowedCommands.contains(baseCommand)) {
+        if (!currentAllowed.contains(baseCommand)) {
             callback.accept(false, "Command not allowed: " + baseCommand
-                + " (whitelist: " + allowedCommands + ")");
+                + " (whitelist: " + currentAllowed + ")");
             return;
         }
 
         LOGGER.info("Executing command: /{}", command);
 
         try {
-            CommandSourceStack source = server.createCommandSourceStack();
+            // 通过 withCallback 捕获命令执行结果
+            AtomicBoolean success = new AtomicBoolean(true);
+            CommandSourceStack source = server.createCommandSourceStack()
+                .withCallback((ok, resultValue) -> {
+                    if (!ok) success.set(false);
+                });
             server.getCommands().performPrefixedCommand(source, command);
-            callback.accept(true, "Command executed successfully: /" + baseCommand);
+            if (success.get()) {
+                callback.accept(true, "Command executed successfully: /" + baseCommand);
+            } else {
+                callback.accept(false, "Command failed: /" + baseCommand);
+            }
         } catch (Exception e) {
             LOGGER.error("Command execution error", e);
             callback.accept(false, "Error: " + e.getMessage());
@@ -124,6 +141,10 @@ public class CommandExecutor {
     }
 
     private void kickPlayer(JsonObject payload, BiConsumer<Boolean, String> callback) {
+        if (!payload.has("player") || payload.get("player").isJsonNull()) {
+            callback.accept(false, "Missing 'player' in payload");
+            return;
+        }
         String playerName = payload.get("player").getAsString();
         String reason = payload.has("reason") ? payload.get("reason").getAsString() : "Kicked by admin";
 
@@ -139,6 +160,10 @@ public class CommandExecutor {
     }
 
     private void opPlayer(JsonObject payload, BiConsumer<Boolean, String> callback) {
+        if (!payload.has("player") || payload.get("player").isJsonNull()) {
+            callback.accept(false, "Missing 'player' in payload");
+            return;
+        }
         String playerName = payload.get("player").getAsString();
 
         ServerPlayer player = server.getPlayerList().getPlayerByName(playerName);
@@ -167,7 +192,7 @@ public class CommandExecutor {
             callback.accept(true, "Server restarting via script");
 
             try {
-                new ProcessBuilder(restartScript)
+                new ProcessBuilder("/bin/sh", "-c", restartScript)
                     .inheritIO()
                     .start();
             } catch (IOException e) {

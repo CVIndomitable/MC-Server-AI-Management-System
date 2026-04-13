@@ -34,31 +34,39 @@ public class StatusReporter {
     }
 
     private void startReporting() {
+        // 初始延迟 = reportInterval，避免 WebSocketManager 尚未初始化时的无效调用
         timer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
                 reportStatus();
             }
-        }, 0, reportInterval);
+        }, reportInterval, reportInterval);
         LOGGER.info("Status reporter started with interval {}ms", reportInterval);
     }
 
     private void reportStatus() {
         try {
-            JsonObject status = collectStatus();
+            // 在服务器主线程收集数据，避免跨线程读取 MC 对象导致并发问题
+            server.execute(() -> {
+                try {
+                    JsonObject status = collectStatus();
 
-            JsonObject message = new JsonObject();
-            message.addProperty("type", "status");
-            message.addProperty("server_id", Config.getServerId());
-            message.addProperty("timestamp", System.currentTimeMillis() / 1000);
-            message.add("data", status);
+                    JsonObject message = new JsonObject();
+                    message.addProperty("type", "status");
+                    message.addProperty("server_id", Config.getServerId());
+                    message.addProperty("timestamp", System.currentTimeMillis() / 1000);
+                    message.add("data", status);
 
-            WebSocketManager wsManager = MCAdminMod.getInstance().getWsManager();
-            if (wsManager != null) {
-                wsManager.sendMessage(message.toString());
-            }
+                    WebSocketManager wsManager = MCAdminMod.getInstance().getWsManager();
+                    if (wsManager != null) {
+                        wsManager.sendMessage(message.toString());
+                    }
+                } catch (Exception e) {
+                    LOGGER.error("Failed to collect/send status", e);
+                }
+            });
         } catch (Exception e) {
-            LOGGER.error("Failed to report status", e);
+            LOGGER.error("Failed to schedule status report", e);
         }
     }
 
@@ -86,19 +94,25 @@ public class StatusReporter {
         return data;
     }
 
+    // 缓存反射字段，避免每次上报都遍历
+    private java.lang.reflect.Field tickTimesField;
+    private boolean tickTimesFieldResolved = false;
+
     private void collectTps(JsonObject data) {
         try {
-            // 通过反射获取 tickTimes/tickTimesNanos（NeoForge映射名可能不同）
-            java.lang.reflect.Field field = null;
-            for (java.lang.reflect.Field f : server.getClass().getSuperclass().getDeclaredFields()) {
-                if (f.getType() == long[].class) {
-                    f.setAccessible(true);
-                    long[] arr = (long[]) f.get(server);
-                    if (arr != null && arr.length >= 100) {
-                        // MC的tickTimes数组固定100个元素
-                        long sum = 0;
-                        for (long t : arr) sum += t;
-                        double avgNanos = sum / (double) arr.length;
+            if (!tickTimesFieldResolved) {
+                tickTimesFieldResolved = true;
+                tickTimesField = resolveTickTimesField();
+            }
+
+            if (tickTimesField != null) {
+                long[] arr = (long[]) tickTimesField.get(server);
+                if (arr != null) {
+                    long sum = 0;
+                    for (long t : arr) sum += t;
+                    double avgNanos = sum / (double) arr.length;
+                    // 合理性校验：tick 耗时应在 0~10 秒（纳秒级）范围内
+                    if (avgNanos > 0 && avgNanos < 10_000_000_000L) {
                         double avgMs = avgNanos / 1_000_000.0;
                         double tps = Math.min(20.0, 1000.0 / Math.max(avgMs, 50.0));
                         data.addProperty("tps", Math.round(tps * 10.0) / 10.0);
@@ -108,13 +122,57 @@ public class StatusReporter {
                 }
             }
         } catch (Exception e) {
-            // 反射失败，使用 fallback
+            LOGGER.debug("Reflection TPS collection failed: {}", e.getMessage());
         }
 
         // Fallback: tickRateManager（返回目标tick率）
         double msPerTick = server.tickRateManager().millisecondsPerTick();
         double tps = Math.min(20.0, msPerTick > 0 ? 1000.0 / msPerTick : 20.0);
         data.addProperty("tps", Math.round(tps * 10.0) / 10.0);
+    }
+
+    /**
+     * 解析 tickTimes 字段：优先按已知名称匹配，回退到类型+长度匹配
+     */
+    private java.lang.reflect.Field resolveTickTimesField() {
+        String[] knownNames = {"tickTimes", "tickTimesNanos", "f_129744_"};
+        // 搜索当前类和父类
+        for (Class<?> clazz = server.getClass(); clazz != null; clazz = clazz.getSuperclass()) {
+            for (java.lang.reflect.Field f : clazz.getDeclaredFields()) {
+                if (f.getType() == long[].class) {
+                    // 优先按名称匹配
+                    for (String name : knownNames) {
+                        if (f.getName().equals(name)) {
+                            try {
+                                f.setAccessible(true);
+                                long[] arr = (long[]) f.get(server);
+                                if (arr != null && arr.length == 100) {
+                                    LOGGER.info("Resolved tickTimes field by name: {}", f.getName());
+                                    return f;
+                                }
+                            } catch (Exception ignored) {}
+                        }
+                    }
+                }
+            }
+        }
+        // 回退：按 long[100] 类型匹配
+        for (Class<?> clazz = server.getClass(); clazz != null; clazz = clazz.getSuperclass()) {
+            for (java.lang.reflect.Field f : clazz.getDeclaredFields()) {
+                if (f.getType() == long[].class) {
+                    try {
+                        f.setAccessible(true);
+                        long[] arr = (long[]) f.get(server);
+                        if (arr != null && arr.length == 100) {
+                            LOGGER.info("Resolved tickTimes field by type: {}.{}", clazz.getSimpleName(), f.getName());
+                            return f;
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+        LOGGER.warn("Could not resolve tickTimes field, using fallback TPS");
+        return null;
     }
 
     private void collectPlayers(JsonObject data) {

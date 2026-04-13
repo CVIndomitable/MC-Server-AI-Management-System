@@ -18,7 +18,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class WebSocketManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(WebSocketManager.class);
-    private static final long RECONNECT_DELAY = 5000;
+    private static final long INITIAL_RECONNECT_DELAY = 5000;
+    private static final long MAX_RECONNECT_DELAY = 60000;
     private static final long HEARTBEAT_INTERVAL = 30000;
 
     private volatile WebSocket webSocket;
@@ -29,6 +30,7 @@ public class WebSocketManager {
     private final AtomicBoolean shouldReconnect = new AtomicBoolean(true);
     private final AtomicBoolean connected = new AtomicBoolean(false);
     private final HttpClient httpClient;
+    private long currentReconnectDelay = INITIAL_RECONNECT_DELAY;
 
     public WebSocketManager(CommandExecutor commandExecutor, StatusReporter statusReporter) {
         this.commandExecutor = commandExecutor;
@@ -56,6 +58,7 @@ public class WebSocketManager {
                         LOGGER.info("WebSocket connected to {}", wsUrl);
                         webSocket = ws;
                         connected.set(true);
+                        currentReconnectDelay = INITIAL_RECONNECT_DELAY;
                         startHeartbeat();
                         ws.request(1);
                     }
@@ -208,13 +211,18 @@ public class WebSocketManager {
     public void sendMessage(String message) {
         WebSocket ws = webSocket;
         if (ws != null && connected.get()) {
-            ws.sendText(message, true);
+            try {
+                ws.sendText(message, true);
+            } catch (Exception e) {
+                LOGGER.warn("Failed to send message: {}", e.getMessage());
+                connected.set(false);
+            }
         } else {
             LOGGER.warn("Cannot send message, WebSocket not connected");
         }
     }
 
-    private void scheduleReconnect() {
+    private synchronized void scheduleReconnect() {
         if (!shouldReconnect.get()) return;
 
         if (reconnectTimer != null) {
@@ -222,7 +230,8 @@ public class WebSocketManager {
         }
 
         reconnectTimer = new Timer("MCAdmin-Reconnect", true);
-        LOGGER.info("Scheduling reconnect in {} ms", RECONNECT_DELAY);
+        LOGGER.info("Scheduling reconnect in {} ms", currentReconnectDelay);
+        long delay = currentReconnectDelay;
         reconnectTimer.schedule(new TimerTask() {
             @Override
             public void run() {
@@ -231,10 +240,13 @@ public class WebSocketManager {
                     connect();
                 }
             }
-        }, RECONNECT_DELAY);
+        }, delay);
+
+        // 指数退避：5s → 10s → 20s → 40s → 60s（上限）
+        currentReconnectDelay = Math.min(currentReconnectDelay * 2, MAX_RECONNECT_DELAY);
     }
 
-    private void startHeartbeat() {
+    private synchronized void startHeartbeat() {
         stopHeartbeat();
         heartbeatTimer = new Timer("MCAdmin-Heartbeat", true);
         heartbeatTimer.scheduleAtFixedRate(new TimerTask() {
@@ -251,7 +263,7 @@ public class WebSocketManager {
         LOGGER.debug("Heartbeat started");
     }
 
-    private void stopHeartbeat() {
+    private synchronized void stopHeartbeat() {
         if (heartbeatTimer != null) {
             heartbeatTimer.cancel();
             heartbeatTimer = null;
@@ -261,13 +273,19 @@ public class WebSocketManager {
     public void disconnect() {
         shouldReconnect.set(false);
         stopHeartbeat();
-        if (reconnectTimer != null) {
-            reconnectTimer.cancel();
-            reconnectTimer = null;
+        synchronized (this) {
+            if (reconnectTimer != null) {
+                reconnectTimer.cancel();
+                reconnectTimer = null;
+            }
         }
         WebSocket ws = webSocket;
         if (ws != null) {
-            ws.sendClose(WebSocket.NORMAL_CLOSURE, "Mod shutting down");
+            try {
+                ws.sendClose(WebSocket.NORMAL_CLOSURE, "Mod shutting down");
+            } catch (Exception e) {
+                LOGGER.debug("Error during WebSocket close: {}", e.getMessage());
+            }
         }
         connected.set(false);
         webSocket = null;
