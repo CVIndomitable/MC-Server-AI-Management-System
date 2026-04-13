@@ -87,13 +87,9 @@ public class CommandExecutor {
 
         try {
             CommandSourceStack source = server.createCommandSourceStack();
-            int result = server.getCommands().performPrefixedCommand(source, command);
-
-            if (result > 0) {
-                callback.accept(true, "Command executed successfully");
-            } else {
-                callback.accept(false, "Command failed");
-            }
+            // NeoForge 1.21.1 中 performPrefixedCommand 返回 void
+            server.getCommands().performPrefixedCommand(source, command);
+            callback.accept(true, "Command executed successfully");
         } catch (Exception e) {
             LOGGER.error("Command execution error", e);
             callback.accept(false, "Error: " + e.getMessage());

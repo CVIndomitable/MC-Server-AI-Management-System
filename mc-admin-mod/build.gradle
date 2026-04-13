@@ -16,20 +16,44 @@ repositories {
     mavenCentral()
 }
 
+// 解决 ASM 模块路径与类路径版本冲突
+configurations.all {
+    resolutionStrategy {
+        force 'org.ow2.asm:asm:9.7'
+        force 'org.ow2.asm:asm-commons:9.7'
+        force 'org.ow2.asm:asm-tree:9.7'
+        force 'org.ow2.asm:asm-util:9.7'
+        force 'org.ow2.asm:asm-analysis:9.7'
+    }
+}
+
 dependencies {
     implementation "net.neoforged:neoforge:${neo_version}"
-
-    // WebSocket 客户端
-    implementation 'org.java-websocket:Java-WebSocket:1.5.6'
-
-    // JSON 处理
-    implementation 'com.google.code.gson:gson:2.10.1'
+    // WebSocket 使用 Java 11+ 内置 java.net.http.WebSocket，无需外部依赖
+    // Gson 已包含在 Minecraft 中，无需额外打包
 }
 
 runs {
     server {
         systemProperty 'forge.logging.console.level', 'debug'
         programArgument '--nogui'
+    }
+}
+
+// 替换资源文件中的 ${} 变量
+tasks.withType(ProcessResources).configureEach {
+    var replaceProperties = [
+        minecraft_version      : minecraft_version,
+        minecraft_version_range: minecraft_version_range,
+        neo_version            : neo_version,
+        neo_version_range      : neo_version_range,
+        loader_version_range   : loader_version_range,
+        mod_id                 : 'mcadmin',
+        mod_version            : version,
+    ]
+    inputs.properties replaceProperties
+    filesMatching(['META-INF/neoforge.mods.toml']) {
+        expand replaceProperties + [project: project]
     }
 }
 

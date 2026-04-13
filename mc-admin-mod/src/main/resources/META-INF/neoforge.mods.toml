@@ -1,10 +1,10 @@
-modLoader="neoforged"
+modLoader="javafml"
 loaderVersion="${loader_version_range}"
 license="MIT"
 
 [[mods]]
 modId="mcadmin"
-version="${file.jarVersion}"
+version="${mod_version}"
 displayName="MC Admin Mod"
 description="AI-powered Minecraft server management mod"
 authors="MCAdmin Team"

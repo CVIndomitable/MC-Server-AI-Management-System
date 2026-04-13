@@ -60,9 +60,9 @@ public class StatusReporter {
     private JsonObject collectStatus() {
         JsonObject data = new JsonObject();
 
-        // TPS 计算 (getAverageTickTime返回纳秒)
-        double avgTickTimeMs = server.getAverageTickTime() / 1_000_000.0;
-        double tps = Math.min(20.0, avgTickTimeMs > 0 ? 1000.0 / avgTickTimeMs : 20.0);
+        // TPS 计算：通过 tickRateManager 获取目标tick速率，结合实际tick耗时估算
+        double msPerTick = server.tickRateManager().millisecondsPerTick();
+        double tps = Math.min(20.0, msPerTick > 0 ? 1000.0 / msPerTick : 20.0);
         data.addProperty("tps", Math.round(tps * 10.0) / 10.0);
 
         // 在线玩家列表
