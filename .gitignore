@@ -1,0 +1,16 @@
+# 敏感文件 — 服务器信息和API key
+docs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 环境变量
+.env
+.env.local
