@@ -1,5 +1,6 @@
 package com.mcadmin.mod;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.slf4j.Logger;
@@ -8,7 +9,8 @@ import org.slf4j.LoggerFactory;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
-import java.nio.ByteBuffer;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.CompletionStage;
@@ -109,6 +111,9 @@ public class WebSocketManager {
                 case "command":
                     handleCommand(json);
                     break;
+                case "update_whitelist":
+                    handleWhitelistUpdate(json);
+                    break;
                 case "auth_response":
                     LOGGER.debug("Received auth_response (auth handled via query params)");
                     break;
@@ -125,21 +130,77 @@ public class WebSocketManager {
     private void handleCommand(JsonObject json) {
         String commandId = json.get("id").getAsString();
         String action = json.get("action").getAsString();
-        JsonObject payload = json.getAsJsonObject("payload");
+        JsonObject payload = json.has("payload") ? json.getAsJsonObject("payload") : new JsonObject();
 
-        LOGGER.info("Received command: {} ({})", action, commandId);
+        // 提取扩展字段
+        String adminId = payload.has("admin_id") ? payload.get("admin_id").getAsString() : null;
+        boolean confirmed = payload.has("confirmed") && payload.get("confirmed").getAsBoolean();
+
+        LOGGER.info("Received command: {} ({}) from admin: {}", action, commandId,
+            adminId != null ? adminId : "unknown");
+
+        // 二次确认检查：危险操作 + 开启确认 + 未确认 → 拒绝并要求确认
+        if (Config.requireConfirmation() && !confirmed
+                && commandExecutor.isDangerousAction(action, payload)) {
+            String detail = commandExecutor.describeCommand(action, payload);
+            LOGGER.warn("Dangerous command requires confirmation: {} ({})", detail, commandId);
+            sendConfirmRequired(commandId, action, detail, adminId);
+            return;
+        }
 
         commandExecutor.executeCommand(commandId, action, payload, (success, output) -> {
-            sendCommandResult(commandId, success, output);
+            sendCommandResult(commandId, success, output, adminId);
         });
     }
 
-    private void sendCommandResult(String commandId, boolean success, String output) {
+    /**
+     * 处理服务器下发的白名单更新
+     * 消息格式: {"type": "update_whitelist", "commands": ["list", "say", ...]}
+     */
+    private void handleWhitelistUpdate(JsonObject json) {
+        if (!json.has("commands")) {
+            LOGGER.warn("Invalid update_whitelist message: missing 'commands' field");
+            return;
+        }
+
+        JsonArray commandsArray = json.getAsJsonArray("commands");
+        Set<String> newCommands = new HashSet<>();
+        for (int i = 0; i < commandsArray.size(); i++) {
+            newCommands.add(commandsArray.get(i).getAsString());
+        }
+
+        commandExecutor.updateAllowedCommands(newCommands);
+        LOGGER.info("Command whitelist updated from server: {} commands", newCommands.size());
+    }
+
+    /**
+     * 发送二次确认请求
+     */
+    private void sendConfirmRequired(String commandId, String action, String detail, String adminId) {
+        JsonObject msg = new JsonObject();
+        msg.addProperty("type", "confirm_required");
+        msg.addProperty("command_id", commandId);
+        msg.addProperty("action", action);
+        msg.addProperty("detail", detail);
+        msg.addProperty("server_id", Config.getServerId());
+        msg.addProperty("timestamp", System.currentTimeMillis() / 1000);
+        if (adminId != null) {
+            msg.addProperty("admin_id", adminId);
+        }
+        sendMessage(msg.toString());
+    }
+
+    private void sendCommandResult(String commandId, boolean success, String output, String adminId) {
         JsonObject result = new JsonObject();
         result.addProperty("type", "result");
         result.addProperty("command_id", commandId);
         result.addProperty("success", success);
         result.addProperty("output", output);
+        result.addProperty("server_id", Config.getServerId());
+        result.addProperty("timestamp", System.currentTimeMillis() / 1000);
+        if (adminId != null) {
+            result.addProperty("admin_id", adminId);
+        }
 
         sendMessage(result.toString());
     }

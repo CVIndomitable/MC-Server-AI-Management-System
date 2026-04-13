@@ -9,6 +9,7 @@ import ServerSelectScreen from './src/screens/ServerSelectScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import StatusScreen from './src/screens/StatusScreen';
 import ActionsScreen from './src/screens/ActionsScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 import { useAppStore } from './src/services/store';
 
 const Tab = createBottomTabNavigator();
@@ -61,6 +62,14 @@ function MainTabs() {
         options={{
           title: '操作',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>⚡</Text>,
+        }}
+      />
+      <Tab.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{
+          title: '设置',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>⚙️</Text>,
         }}
       />
     </Tab.Navigator>

@@ -67,7 +67,7 @@ export default function StatusScreen() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>内存使用</Text>
         <View style={styles.memoryBar}>
-          <View style={[styles.memoryFill, { width: `${memoryPercent}%` }]} />
+          <View style={[styles.memoryFill, { width: `${memoryPercent}%` as any }]} />
         </View>
         <Text style={styles.memoryText}>
           {serverStatus.memory_used_mb} MB / {serverStatus.memory_max_mb} MB ({memoryPercent}%)

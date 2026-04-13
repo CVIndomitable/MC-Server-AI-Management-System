@@ -1,6 +1,10 @@
 import axios, { AxiosInstance } from 'axios';
 import { CONFIG } from '../utils/config';
-import { ApiResponse, AuthCredentials, AuthToken, ChatMessage, UserServerInfo, ServerInfo, BindRequestInfo } from '../types';
+import {
+  ApiResponse, AuthCredentials, AuthToken, ChatApiResponse,
+  UserServerInfo, ServerInfo, BindRequestInfo, ServerUserInfo,
+  UserInfo, ModelTier, MemoryResponse,
+} from '../types';
 
 class ApiService {
   private client: AxiosInstance;
@@ -32,90 +36,116 @@ class ApiService {
     this.token = null;
   }
 
-  // 用户认证
+  // ---- 用户认证 ----
+
   async login(credentials: AuthCredentials): Promise<ApiResponse<AuthToken>> {
     try {
       const response = await this.client.post('/api/v1/auth/login', credentials);
       return { success: true, data: response.data };
     } catch (error: any) {
-      const statusCode = error.response?.status;
-
-      if (statusCode === 401) {
+      if (error.response?.status === 401) {
         return { success: false, error: '用户名或密码错误' };
-      } else if (statusCode === 500) {
-        return { success: false, error: '服务器错误，请稍后重试' };
-      } else if (error.code === 'ECONNABORTED') {
-        return { success: false, error: '请求超时，请检查网络连接' };
-      } else if (!error.response) {
-        return { success: false, error: '无法连接服务器，请检查网络' };
       }
-
       return { success: false, error: this.getChineseError(error, '登录失败') };
     }
   }
 
-  // 发送聊天消息
-  async sendChatMessage(message: string, serverId: string, queryOnly: boolean = false): Promise<ApiResponse<ChatMessage>> {
+  async register(username: string, password: string, role: string = 'user'): Promise<ApiResponse<UserInfo>> {
+    try {
+      const response = await this.client.post('/api/v1/auth/register', { username, password, role });
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      if (error.response?.status === 409) {
+        return { success: false, error: '用户名已存在' };
+      }
+      return { success: false, error: this.getChineseError(error, '注册失败') };
+    }
+  }
+
+  async changePassword(oldPassword: string, newPassword: string): Promise<ApiResponse> {
+    try {
+      const response = await this.client.put('/api/v1/auth/password', {
+        old_password: oldPassword,
+        new_password: newPassword,
+      });
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      if (error.response?.status === 400) {
+        return { success: false, error: error.response.data?.detail || '旧密码不正确' };
+      }
+      return { success: false, error: this.getChineseError(error, '修改密码失败') };
+    }
+  }
+
+  async resetPassword(username: string, newPassword: string): Promise<ApiResponse> {
+    try {
+      const response = await this.client.put(`/api/v1/auth/users/${username}/password`, {
+        new_password: newPassword,
+      });
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      return { success: false, error: this.getChineseError(error, '重置密码失败') };
+    }
+  }
+
+  async listUsers(): Promise<ApiResponse<{ users: UserInfo[] }>> {
+    try {
+      const response = await this.client.get('/api/v1/auth/users');
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      return { success: false, error: this.getChineseError(error, '获取用户列表失败') };
+    }
+  }
+
+  async deleteUser(username: string): Promise<ApiResponse> {
+    try {
+      const response = await this.client.delete(`/api/v1/auth/users/${username}`);
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      return { success: false, error: this.getChineseError(error, '删除用户失败') };
+    }
+  }
+
+  // ---- 聊天 ----
+
+  async sendChatMessage(
+    message: string,
+    serverId: string,
+    queryOnly: boolean = false,
+    modelTier?: ModelTier,
+  ): Promise<ApiResponse<ChatApiResponse>> {
     try {
       const response = await this.client.post('/api/v1/chat', {
         message,
         server_id: serverId,
         query_only: queryOnly,
+        model_tier: modelTier || null,
       });
       return { success: true, data: response.data };
     } catch (error: any) {
-      if (!error.response) {
-        return { success: false, error: '无法连接服务器，请检查网络' };
-      } else if (error.code === 'ECONNABORTED') {
-        return { success: false, error: '请求超时，请稍后重试' };
-      } else if (error.response.status === 401) {
+      if (error.response?.status === 401) {
         return { success: false, error: '认证已过期，请重新登录' };
       }
-
+      if (error.response?.status === 503) {
+        return { success: false, error: '服务器未连接' };
+      }
       return { success: false, error: this.getChineseError(error, '发送消息失败') };
     }
   }
 
-  // 获取服务器状态
+  // ---- 服务器状态 ----
+
   async getServerStatus(serverId: string): Promise<ApiResponse> {
     try {
-      const response = await this.client.get(`/api/v1/servers/${serverId}/status`);
+      const response = await this.client.get(`/api/v1/status/${serverId}`);
       return { success: true, data: response.data };
     } catch (error: any) {
-      if (!error.response) {
-        return { success: false, error: '无法连接服务器，请检查网络' };
-      } else if (error.code === 'ECONNABORTED') {
-        return { success: false, error: '请求超时，请稍后重试' };
-      }
-
       return { success: false, error: this.getChineseError(error, '获取状态失败') };
-    }
-  }
-
-  // 执行快捷操作
-  async executeQuickAction(serverId: string, action: string, params?: any): Promise<ApiResponse> {
-    try {
-      const response = await this.client.post(`/api/v1/servers/${serverId}/actions`, {
-        action,
-        params,
-      });
-      return { success: true, data: response.data };
-    } catch (error: any) {
-      if (!error.response) {
-        return { success: false, error: '无法连接服务器，请检查网络' };
-      } else if (error.code === 'ECONNABORTED') {
-        return { success: false, error: '请求超时，请稍后重试' };
-      } else if (error.response.status === 403) {
-        return { success: false, error: '权限不足，无法执行此操作' };
-      }
-
-      return { success: false, error: this.getChineseError(error, '操作执行失败') };
     }
   }
 
   // ---- 服务器管理 ----
 
-  // 获取我绑定的服务器列表
   async getMyServers(): Promise<ApiResponse<{ servers: UserServerInfo[] }>> {
     try {
       const response = await this.client.get('/api/v1/servers/my');
@@ -125,7 +155,6 @@ class ApiService {
     }
   }
 
-  // 获取未绑定的服务器列表
   async getUnboundServers(): Promise<ApiResponse<{ servers: ServerInfo[] }>> {
     try {
       const response = await this.client.get('/api/v1/servers/unbound');
@@ -135,13 +164,11 @@ class ApiService {
     }
   }
 
-  // 绑定服务器（第一人→owner，后续→创建申请）
   async bindServer(serverId: string): Promise<ApiResponse<UserServerInfo>> {
     try {
       const response = await this.client.post(`/api/v1/servers/${serverId}/bind`);
       return { success: true, data: response.data };
     } catch (error: any) {
-      // 202 表示已提交申请等待审批
       if (error.response?.status === 202) {
         return { success: false, error: error.response.data?.detail || '已提交绑定申请，等待主管理员审批' };
       }
@@ -149,7 +176,6 @@ class ApiService {
     }
   }
 
-  // 获取待审批的绑定申请
   async getBindRequests(serverId: string): Promise<ApiResponse<{ requests: BindRequestInfo[] }>> {
     try {
       const response = await this.client.get(`/api/v1/servers/${serverId}/requests`);
@@ -159,7 +185,6 @@ class ApiService {
     }
   }
 
-  // 批准绑定申请
   async approveBindRequest(serverId: string, requestId: number): Promise<ApiResponse> {
     try {
       const response = await this.client.post(`/api/v1/servers/${serverId}/requests/${requestId}/approve`);
@@ -169,7 +194,6 @@ class ApiService {
     }
   }
 
-  // 拒绝绑定申请
   async rejectBindRequest(serverId: string, requestId: number): Promise<ApiResponse> {
     try {
       const response = await this.client.post(`/api/v1/servers/${serverId}/requests/${requestId}/reject`);
@@ -179,13 +203,65 @@ class ApiService {
     }
   }
 
-  // 将错误信息转为中文，避免暴露英文错误给用户
+  async listServerUsers(serverId: string): Promise<ApiResponse<{ users: ServerUserInfo[] }>> {
+    try {
+      const response = await this.client.get(`/api/v1/servers/${serverId}/users`);
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      return { success: false, error: this.getChineseError(error, '获取管理员列表失败') };
+    }
+  }
+
+  async updateServerName(serverId: string, name: string): Promise<ApiResponse> {
+    try {
+      const response = await this.client.put(`/api/v1/servers/${serverId}/name`, { name });
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      return { success: false, error: this.getChineseError(error, '修改名称失败') };
+    }
+  }
+
+  async unbindUser(serverId: string, username: string): Promise<ApiResponse> {
+    try {
+      const response = await this.client.delete(`/api/v1/servers/${serverId}/unbind/${username}`);
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      return { success: false, error: this.getChineseError(error, '解绑失败') };
+    }
+  }
+
+  // ---- 记忆系统 ----
+
+  async getMemory(type: 'global' | 'admin' | 'server', id?: string): Promise<ApiResponse<MemoryResponse>> {
+    try {
+      const path = type === 'global' ? '/api/v1/memory/global' : `/api/v1/memory/${type}/${id}`;
+      const response = await this.client.get(path);
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      return { success: false, error: this.getChineseError(error, '获取记忆失败') };
+    }
+  }
+
+  async updateMemory(type: 'global' | 'admin' | 'server', id: string, content: string): Promise<ApiResponse> {
+    try {
+      const path = type === 'global' ? '/api/v1/memory/global' : `/api/v1/memory/${type}/${id}`;
+      const response = await this.client.put(path, { content });
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      return { success: false, error: this.getChineseError(error, '更新记忆失败') };
+    }
+  }
+
+  // 将错误信息转为中文
   private getChineseError(error: any, fallback: string): string {
+    if (!error.response) return '无法连接服务器，请检查网络';
+    if (error.code === 'ECONNABORTED') return '请求超时，请稍后重试';
     const status = error.response?.status;
-    if (status === 400) return '请求参数错误';
+    if (status === 400) return error.response.data?.detail || '请求参数错误';
     if (status === 401) return '认证已过期，请重新登录';
     if (status === 403) return '权限不足';
     if (status === 404) return '请求的资源不存在';
+    if (status === 409) return error.response.data?.detail || '资源冲突';
     if (status === 429) return '请求过于频繁，请稍后重试';
     if (status >= 500) return '服务器内部错误，请稍后重试';
     return fallback;

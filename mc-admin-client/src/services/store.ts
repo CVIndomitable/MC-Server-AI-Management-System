@@ -4,20 +4,36 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
-import { ServerStatus, ChatMessage, UserServerInfo, ServerInfo } from '../types';
+import { ServerStatus, ChatMessage, UserServerInfo, ServerInfo, ModelTier } from '../types';
 import apiService from '../services/api';
 import wsService from '../services/websocket';
 
 const TOKEN_KEY = '@mc_admin_token';
 const SERVER_ID_KEY = '@mc_admin_server_id';
 const QUERY_ONLY_KEY = '@mc_admin_query_only';
+const USERNAME_KEY = '@mc_admin_username';
+const ROLE_KEY = '@mc_admin_role';
+const MODEL_TIER_KEY = '@mc_admin_model_tier';
+
+// 从JWT中解析payload
+function parseJwtPayload(token: string): { sub?: string; role?: string } | null {
+  try {
+    const payload = token.split('.')[1];
+    const decoded = atob(payload);
+    return JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+}
 
 interface AppState {
   // 认证状态
   isAuthenticated: boolean;
   token: string | null;
+  username: string;
+  userRole: string; // admin | user
   serverId: string;
-  serverSelected: boolean; // 是否已选择服务器
+  serverSelected: boolean;
 
   // 服务器列表
   myServers: UserServerInfo[];
@@ -33,7 +49,8 @@ interface AppState {
   isLoading: boolean;
   error: string | null;
   wsConnected: boolean;
-  queryOnlyMode: boolean; // 仅查询模式
+  queryOnlyMode: boolean;
+  modelTier: ModelTier | undefined;
 
   // WebSocket消息处理器引用
   wsMessageHandler: ((message: any) => void) | null;
@@ -54,12 +71,16 @@ interface AppState {
   setError: (error: string | null) => void;
   restoreSession: () => Promise<void>;
   toggleQueryOnlyMode: () => void;
+  setModelTier: (tier: ModelTier | undefined) => void;
   clearServerSelection: () => void;
+  getCurrentServerRole: () => string | null;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
   isAuthenticated: false,
   token: null,
+  username: '',
+  userRole: '',
   serverId: '',
   serverSelected: false,
   myServers: [],
@@ -70,6 +91,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   error: null,
   wsConnected: false,
   queryOnlyMode: false,
+  modelTier: undefined,
   wsMessageHandler: null,
 
   login: async (username: string, password: string) => {
@@ -81,20 +103,28 @@ export const useAppStore = create<AppState>((set, get) => ({
       const token = result.data.access_token;
       apiService.setToken(token);
 
-      // 持久化token
+      // 从JWT解析用户信息
+      const payload = parseJwtPayload(token);
+      const parsedUsername = payload?.sub || username;
+      const parsedRole = payload?.role || 'user';
+
       await AsyncStorage.setItem(TOKEN_KEY, token);
+      await AsyncStorage.setItem(USERNAME_KEY, parsedUsername);
+      await AsyncStorage.setItem(ROLE_KEY, parsedRole);
 
       set({
         isAuthenticated: true,
         token,
-        isLoading: false
+        username: parsedUsername,
+        userRole: parsedRole,
+        isLoading: false,
       });
 
       return true;
     } else {
       set({
         isLoading: false,
-        error: result.error || '登录失败'
+        error: result.error || '登录失败',
       });
       return false;
     }
@@ -104,19 +134,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().disconnectWebSocket();
     apiService.clearToken();
 
-    // 清除持久化数据
     AsyncStorage.removeItem(TOKEN_KEY);
     AsyncStorage.removeItem(SERVER_ID_KEY);
+    AsyncStorage.removeItem(USERNAME_KEY);
+    AsyncStorage.removeItem(ROLE_KEY);
 
     set({
       isAuthenticated: false,
       token: null,
+      username: '',
+      userRole: '',
       serverId: '',
       serverSelected: false,
       myServers: [],
       unboundServers: [],
       chatMessages: [],
-      serverStatus: null
+      serverStatus: null,
     });
   },
 
@@ -153,7 +186,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   bindServer: async (serverId: string) => {
     const result = await apiService.bindServer(serverId);
     if (result.success) {
-      // 绑定成功，刷新列表
       await get().fetchMyServers();
       return { success: true };
     }
@@ -166,14 +198,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   addChatMessage: (message: ChatMessage) => {
     set(state => ({
-      chatMessages: [...state.chatMessages, message]
+      chatMessages: [...state.chatMessages, message],
     }));
   },
 
   sendMessage: async (content: string) => {
-    const { serverId, token, addChatMessage, queryOnlyMode } = get();
+    const { serverId, addChatMessage, queryOnlyMode, modelTier } = get();
 
-    // 添加用户消息
     const userMessage: ChatMessage = {
       id: generateId(),
       role: 'user',
@@ -184,7 +215,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     set({ isLoading: true });
 
-    const result = await apiService.sendChatMessage(content, serverId, queryOnlyMode);
+    const result = await apiService.sendChatMessage(content, serverId, queryOnlyMode, modelTier);
 
     if (result.success && result.data) {
       const aiMessage: ChatMessage = {
@@ -195,7 +226,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       };
       addChatMessage(aiMessage);
     } else {
-      // 添加错误消息
       const errorMessage: ChatMessage = {
         id: generateId(),
         role: 'assistant',
@@ -213,14 +243,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (!token) return;
 
-    // 清理旧的处理器
     if (wsMessageHandler) {
       wsService.removeMessageHandler(wsMessageHandler);
     }
 
     wsService.connect(token, serverId);
 
-    // 创建并保存新的消息处理器
     const handler = (message: any) => {
       if (message.type === 'status' && message.data) {
         updateServerStatus(message.data);
@@ -235,7 +263,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     };
 
-    // 注册状态处理器
     const statusHandler = (connected: boolean) => {
       set({ wsConnected: connected });
     };
@@ -248,7 +275,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   disconnectWebSocket: () => {
     const { wsMessageHandler } = get();
 
-    // 清理消息处理器
     if (wsMessageHandler) {
       wsService.removeMessageHandler(wsMessageHandler);
       set({ wsMessageHandler: null });
@@ -263,18 +289,36 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   restoreSession: async () => {
     try {
-      const token = await AsyncStorage.getItem(TOKEN_KEY);
-      const serverId = await AsyncStorage.getItem(SERVER_ID_KEY);
-      const queryOnly = await AsyncStorage.getItem(QUERY_ONLY_KEY);
+      const [token, serverId, queryOnly, username, role, modelTier] = await Promise.all([
+        AsyncStorage.getItem(TOKEN_KEY),
+        AsyncStorage.getItem(SERVER_ID_KEY),
+        AsyncStorage.getItem(QUERY_ONLY_KEY),
+        AsyncStorage.getItem(USERNAME_KEY),
+        AsyncStorage.getItem(ROLE_KEY),
+        AsyncStorage.getItem(MODEL_TIER_KEY),
+      ]);
 
       if (token) {
         apiService.setToken(token);
+
+        // 如果没有缓存的用户名，尝试从JWT解析
+        let resolvedUsername = username || '';
+        let resolvedRole = role || '';
+        if (!resolvedUsername) {
+          const payload = parseJwtPayload(token);
+          resolvedUsername = payload?.sub || '';
+          resolvedRole = payload?.role || '';
+        }
+
         set({
           isAuthenticated: true,
           token,
+          username: resolvedUsername,
+          userRole: resolvedRole,
           serverId: serverId || '',
           serverSelected: !!serverId,
           queryOnlyMode: queryOnly === 'true',
+          modelTier: (modelTier as ModelTier) || undefined,
         });
       }
     } catch (error) {
@@ -286,5 +330,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     const newValue = !get().queryOnlyMode;
     set({ queryOnlyMode: newValue });
     AsyncStorage.setItem(QUERY_ONLY_KEY, String(newValue));
+  },
+
+  setModelTier: (tier: ModelTier | undefined) => {
+    set({ modelTier: tier });
+    if (tier) {
+      AsyncStorage.setItem(MODEL_TIER_KEY, tier);
+    } else {
+      AsyncStorage.removeItem(MODEL_TIER_KEY);
+    }
+  },
+
+  getCurrentServerRole: () => {
+    const { myServers, serverId } = get();
+    const server = myServers.find(s => s.server_id === serverId);
+    return server?.role || null;
   },
 }));

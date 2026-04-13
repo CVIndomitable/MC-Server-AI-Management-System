@@ -1,6 +1,5 @@
 package com.mcadmin.mod;
 
-import com.google.gson.JsonObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -8,12 +7,17 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.Properties;
-import java.util.UUID;
+import java.util.*;
 
 public class Config {
     private static final Logger LOGGER = LoggerFactory.getLogger(Config.class);
     private static final String CONFIG_FILE = "config/mcadmin.properties";
+
+    private static final String DEFAULT_ALLOWED_COMMANDS =
+        "list,say,op,deop,kick,ban,pardon,whitelist,save-all,time,weather," +
+        "gamemode,tp,give,tell,msg,effect,difficulty,gamerule,seed,title,tellraw,stop";
+
+    private static final String DEFAULT_DANGEROUS_COMMANDS = "ban,op,deop,stop,whitelist";
 
     private static Properties props = new Properties();
 
@@ -38,8 +42,11 @@ public class Config {
         props.setProperty("ws.token", "change-me-in-config-file");
         // server.id 留空，由 ensureServerId() 自动生成
         props.setProperty("server.id", "");
+        props.setProperty("server.restart_script", "");
         props.setProperty("status.report_interval", "5000");
-        props.setProperty("security.require_confirmation", "true");
+        props.setProperty("security.require_confirmation", "false");
+        props.setProperty("security.allowed_commands", DEFAULT_ALLOWED_COMMANDS);
+        props.setProperty("security.dangerous_commands", DEFAULT_DANGEROUS_COMMANDS);
     }
 
     /**
@@ -86,6 +93,43 @@ public class Config {
     }
 
     public static boolean requireConfirmation() {
-        return Boolean.parseBoolean(props.getProperty("security.require_confirmation", "true"));
+        return Boolean.parseBoolean(props.getProperty("security.require_confirmation", "false"));
+    }
+
+    /**
+     * 获取允许执行的命令白名单
+     */
+    public static Set<String> getAllowedCommands() {
+        String raw = props.getProperty("security.allowed_commands", DEFAULT_ALLOWED_COMMANDS);
+        Set<String> commands = new HashSet<>();
+        for (String cmd : raw.split(",")) {
+            String trimmed = cmd.trim();
+            if (!trimmed.isEmpty()) {
+                commands.add(trimmed);
+            }
+        }
+        return commands;
+    }
+
+    /**
+     * 获取需要二次确认的危险命令列表
+     */
+    public static Set<String> getDangerousCommands() {
+        String raw = props.getProperty("security.dangerous_commands", DEFAULT_DANGEROUS_COMMANDS);
+        Set<String> commands = new HashSet<>();
+        for (String cmd : raw.split(",")) {
+            String trimmed = cmd.trim();
+            if (!trimmed.isEmpty()) {
+                commands.add(trimmed);
+            }
+        }
+        return commands;
+    }
+
+    /**
+     * 获取重启脚本路径（空字符串表示未配置）
+     */
+    public static String getRestartScript() {
+        return props.getProperty("server.restart_script", "").trim();
     }
 }

@@ -18,6 +18,7 @@ public class MCAdminMod {
     private WebSocketManager wsManager;
     private StatusReporter statusReporter;
     private CommandExecutor commandExecutor;
+    private LogCollector logCollector;
 
     public MCAdminMod(IEventBus modEventBus) {
         instance = this;
@@ -42,6 +43,10 @@ public class MCAdminMod {
         // 初始化状态上报器
         statusReporter = new StatusReporter(event.getServer());
 
+        // 初始化日志收集器（自动拦截 WARN/ERROR 级别日志）
+        logCollector = new LogCollector(statusReporter);
+        logCollector.register();
+
         // 初始化 WebSocket 管理器
         wsManager = new WebSocketManager(commandExecutor, statusReporter);
         wsManager.connect();
@@ -51,6 +56,10 @@ public class MCAdminMod {
 
     private void onServerStopping(ServerStoppingEvent event) {
         LOGGER.info("Server stopping, cleaning up MC Admin components");
+
+        if (logCollector != null) {
+            logCollector.unregister();
+        }
 
         if (wsManager != null) {
             wsManager.disconnect();

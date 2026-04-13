@@ -16,8 +16,10 @@ interface QuickAction {
   id: string;
   title: string;
   icon: string;
-  action: string;
+  command: string; // 发给AI的自然语言指令
   needsInput?: boolean;
+  inputPlaceholder?: string;
+  buildCommand?: (input: string) => string;
   confirmMessage?: string;
   color: string;
 }
@@ -27,7 +29,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     id: 'restart',
     title: '重启服务器',
     icon: '🔄',
-    action: 'restart',
+    command: '请重启服务器',
     confirmMessage: '确定要重启服务器吗？',
     color: '#FF9800',
   },
@@ -35,30 +37,34 @@ const QUICK_ACTIONS: QuickAction[] = [
     id: 'backup',
     title: '立即备份',
     icon: '💾',
-    action: 'backup',
+    command: '请立即备份服务器世界',
     color: '#4CAF50',
   },
   {
     id: 'announce',
     title: '发送公告',
     icon: '📢',
-    action: 'announce',
     needsInput: true,
+    inputPlaceholder: '输入公告内容...',
+    command: '',
+    buildCommand: (input: string) => `请向全服广播消息：${input}`,
     color: '#2196F3',
   },
   {
     id: 'whitelist',
-    title: '白名单管理',
+    title: '白名单添加',
     icon: '📋',
-    action: 'whitelist',
     needsInput: true,
+    inputPlaceholder: '输入玩家名称...',
+    command: '',
+    buildCommand: (input: string) => `请将玩家 ${input} 添加到白名单`,
     color: '#9C27B0',
   },
   {
     id: 'stop',
     title: '停止服务器',
     icon: '⏹️',
-    action: 'stop',
+    command: '请停止服务器',
     confirmMessage: '确定要停止服务器吗？这将断开所有玩家连接。',
     color: '#F44336',
   },
@@ -66,7 +72,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     id: 'save',
     title: '保存世界',
     icon: '💿',
-    action: 'save',
+    command: '请保存当前世界',
     color: '#00BCD4',
   },
 ];
@@ -93,44 +99,40 @@ export default function ActionsScreen() {
     }
   };
 
-  const executeAction = async (action: QuickAction, params?: any) => {
+  const executeAction = async (action: QuickAction, input?: string) => {
     setIsExecuting(true);
 
-    const result = await apiService.executeQuickAction(serverId, action.action, params);
+    const command = action.buildCommand && input
+      ? action.buildCommand(input)
+      : action.command;
+
+    const result = await apiService.sendChatMessage(command, serverId, false);
 
     setIsExecuting(false);
 
     if (result.success) {
-      Alert.alert('成功', `${action.title}执行成功`);
+      Alert.alert('执行结果', result.data?.message || `${action.title}已发送`);
     } else {
       Alert.alert('失败', result.error || '操作失败');
     }
   };
 
   const handleModalConfirm = () => {
-    if (!selectedAction) return;
-
-    let params: any = {};
-
-    if (selectedAction.id === 'announce') {
-      params = { message: inputValue };
-    } else if (selectedAction.id === 'whitelist') {
-      params = { player: inputValue };
-    }
-
+    if (!selectedAction || !inputValue.trim()) return;
     setModalVisible(false);
-    executeAction(selectedAction, params);
+    executeAction(selectedAction, inputValue.trim());
   };
 
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.header}>快捷操作</Text>
+      <Text style={styles.subHeader}>通过AI智能执行服务器操作</Text>
 
       <View style={styles.grid}>
         {QUICK_ACTIONS.map((action) => (
           <TouchableOpacity
             key={action.id}
-            style={[styles.actionButton, { borderColor: action.color }]}
+            style={[styles.actionButton, { borderColor: action.color }, isExecuting && styles.actionDisabled]}
             onPress={() => handleActionPress(action)}
             disabled={isExecuting}
           >
@@ -155,11 +157,7 @@ export default function ActionsScreen() {
               style={styles.modalInput}
               value={inputValue}
               onChangeText={setInputValue}
-              placeholder={
-                selectedAction?.id === 'announce'
-                  ? '输入公告内容...'
-                  : '输入玩家名称...'
-              }
+              placeholder={selectedAction?.inputPlaceholder || '请输入...'}
               placeholderTextColor="#888"
               multiline={selectedAction?.id === 'announce'}
             />
@@ -196,7 +194,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 24,
     fontWeight: 'bold',
-    margin: 16,
+    marginHorizontal: 16,
+    marginTop: 16,
+  },
+  subHeader: {
+    color: '#888',
+    fontSize: 13,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    marginTop: 4,
   },
   grid: {
     flexDirection: 'row',
@@ -212,6 +218,9 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  actionDisabled: {
+    opacity: 0.5,
   },
   actionIcon: {
     fontSize: 48,

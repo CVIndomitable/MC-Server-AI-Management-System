@@ -23,12 +23,19 @@ export interface WSMessage {
   message?: string;
 }
 
-// 聊天消息
+// 聊天消息（客户端展示用）
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+}
+
+// AI聊天API响应
+export interface ChatApiResponse {
+  message: string;
+  command_executed?: any;
+  timestamp: string;
 }
 
 // API响应
@@ -49,6 +56,16 @@ export interface AuthToken {
   token_type: string;
 }
 
+// 用户信息
+export interface UserInfo {
+  username: string;
+  role: string;
+  created_at: string;
+}
+
+// 模型级别
+export type ModelTier = 'flash' | 'standard' | 'pro';
+
 // 服务器管理
 export interface UserServerInfo {
   server_id: string;
@@ -66,6 +83,12 @@ export interface ServerInfo {
   last_seen_at?: string;
 }
 
+export interface ServerUserInfo {
+  username: string;
+  role: string;
+  bound_at: string;
+}
+
 export interface BindRequestInfo {
   id: number;
   username: string;
@@ -74,4 +97,10 @@ export interface BindRequestInfo {
   created_at: string;
   resolved_at?: string;
   resolved_by?: string;
+}
+
+// 记忆系统
+export interface MemoryResponse {
+  content: string;
+  updated_at?: string;
 }

@@ -11,14 +11,25 @@ import {
   Switch,
 } from 'react-native';
 import { useAppStore } from '../services/store';
-import { ChatMessage } from '../types';
+import { ChatMessage, ModelTier } from '../types';
+
+const MODEL_OPTIONS: { label: string; value: ModelTier | undefined; desc: string }[] = [
+  { label: '自动', value: undefined, desc: '系统自动选择' },
+  { label: '极速', value: 'flash', desc: '简单任务' },
+  { label: '标准', value: 'standard', desc: '日常使用' },
+  { label: '专业', value: 'pro', desc: '复杂分析' },
+];
 
 export default function ChatScreen() {
   const [inputText, setInputText] = useState('');
-  const { chatMessages, sendMessage, isLoading, queryOnlyMode, toggleQueryOnlyMode } = useAppStore();
+  const [showModelPicker, setShowModelPicker] = useState(false);
+  const {
+    chatMessages, sendMessage, isLoading,
+    queryOnlyMode, toggleQueryOnlyMode,
+    modelTier, setModelTier,
+  } = useAppStore();
   const flatListRef = useRef<FlatList>(null);
 
-  // 新消息到达时自动滚动到底部
   useEffect(() => {
     if (chatMessages.length > 0) {
       setTimeout(() => {
@@ -34,6 +45,8 @@ export default function ChatScreen() {
     setInputText('');
     await sendMessage(message);
   };
+
+  const currentModelLabel = MODEL_OPTIONS.find(m => m.value === modelTier)?.label || '自动';
 
   const renderMessage = ({ item }: { item: ChatMessage }) => (
     <View
@@ -58,17 +71,53 @@ export default function ChatScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={90}
     >
+      {/* 顶部控制栏 */}
       <View style={styles.modeBar}>
-        <Text style={styles.modeLabel}>
-          {queryOnlyMode ? '仅查询模式（只建议不执行）' : '正常模式（AI可执行操作）'}
-        </Text>
-        <Switch
-          value={queryOnlyMode}
-          onValueChange={toggleQueryOnlyMode}
-          trackColor={{ false: '#555', true: '#FF9500' }}
-          thumbColor={queryOnlyMode ? '#fff' : '#ccc'}
-        />
+        <View style={styles.modeLeft}>
+          <Text style={styles.modeLabel}>
+            {queryOnlyMode ? '仅查询' : '正常'}
+          </Text>
+          <Switch
+            value={queryOnlyMode}
+            onValueChange={toggleQueryOnlyMode}
+            trackColor={{ false: '#555', true: '#FF9500' }}
+            thumbColor={queryOnlyMode ? '#fff' : '#ccc'}
+          />
+        </View>
+        <TouchableOpacity
+          style={styles.modelButton}
+          onPress={() => setShowModelPicker(!showModelPicker)}
+        >
+          <Text style={styles.modelButtonText}>{currentModelLabel}</Text>
+        </TouchableOpacity>
       </View>
+
+      {/* 模型选择器 */}
+      {showModelPicker && (
+        <View style={styles.modelPicker}>
+          {MODEL_OPTIONS.map((option) => (
+            <TouchableOpacity
+              key={option.label}
+              style={[
+                styles.modelOption,
+                modelTier === option.value && styles.modelOptionActive,
+              ]}
+              onPress={() => {
+                setModelTier(option.value);
+                setShowModelPicker(false);
+              }}
+            >
+              <Text style={[
+                styles.modelOptionLabel,
+                modelTier === option.value && styles.modelOptionLabelActive,
+              ]}>
+                {option.label}
+              </Text>
+              <Text style={styles.modelOptionDesc}>{option.desc}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       <FlatList
         ref={flatListRef}
@@ -119,9 +168,58 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#333',
   },
+  modeLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   modeLabel: {
     color: '#ccc',
     fontSize: 13,
+  },
+  modelButton: {
+    backgroundColor: '#3a3a3a',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  modelButtonText: {
+    color: '#007AFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  modelPicker: {
+    flexDirection: 'row',
+    backgroundColor: '#2a2a2a',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+    gap: 8,
+  },
+  modelOption: {
+    flex: 1,
+    backgroundColor: '#3a3a3a',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+  },
+  modelOptionActive: {
+    backgroundColor: '#007AFF',
+  },
+  modelOptionLabel: {
+    color: '#ccc',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  modelOptionLabelActive: {
+    color: '#fff',
+  },
+  modelOptionDesc: {
+    color: '#888',
+    fontSize: 10,
+    marginTop: 2,
   },
   messageList: {
     padding: 16,
