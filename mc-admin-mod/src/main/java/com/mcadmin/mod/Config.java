@@ -29,19 +29,19 @@ public class Config {
     }
 
     private static void setDefaults() {
-        props.setProperty("ws.url", "ws://localhost:8080/ws");
-        props.setProperty("ws.token", "test_token_123");
+        props.setProperty("ws.url", "ws://47.113.221.26/mc-admin/ws/mod");
+        props.setProperty("ws.token", "BeHvYrsaAoJ0oi5W8QyrwpZI_i3t7b6A");
         props.setProperty("server.id", "srv_001");
         props.setProperty("status.report_interval", "5000");
         props.setProperty("security.require_confirmation", "true");
     }
 
     public static String getWsUrl() {
-        return props.getProperty("ws.url", "ws://localhost:8080/ws");
+        return props.getProperty("ws.url", "ws://47.113.221.26/mc-admin/ws/mod");
     }
 
     public static String getAuthToken() {
-        return props.getProperty("ws.token", "test_token_123");
+        return props.getProperty("ws.token", "BeHvYrsaAoJ0oi5W8QyrwpZI_i3t7b6A");
     }
 
     public static String getServerId() {

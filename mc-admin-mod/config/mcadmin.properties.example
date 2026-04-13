@@ -1,7 +1,7 @@
 # MC Admin Mod 配置文件
 
-# WebSocket 连接配置
-ws.url=ws://localhost:8080/ws
+# WebSocket 连接配置（server_id 和 token 会自动作为查询参数附加到 URL）
+ws.url=ws://localhost:8000/ws/mod
 ws.token=test_token_123
 
 # 服务器标识

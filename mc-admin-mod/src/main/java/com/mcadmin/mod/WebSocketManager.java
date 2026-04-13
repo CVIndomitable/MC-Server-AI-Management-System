@@ -32,19 +32,18 @@ public class WebSocketManager {
         try {
             String wsUrl = Config.getWsUrl();
             String authToken = Config.getAuthToken();
+            String serverId = Config.getServerId();
 
-            URI uri = new URI(wsUrl);
+            // 将 server_id 和 token 作为查询参数拼接到 URL（服务器端通过 Query 参数验证）
+            String separator = wsUrl.contains("?") ? "&" : "?";
+            String fullUrl = wsUrl + separator + "server_id=" + serverId + "&token=" + authToken;
+
+            URI uri = new URI(fullUrl);
             client = new WebSocketClient(uri) {
                 @Override
                 public void onOpen(ServerHandshake handshake) {
                     LOGGER.info("WebSocket connected to {}", wsUrl);
-                    // 发送认证消息
-                    JsonObject auth = new JsonObject();
-                    auth.addProperty("type", "auth");
-                    auth.addProperty("token", authToken);
-                    send(auth.toString());
-
-                    // 启动心跳
+                    // 认证已通过 URL 查询参数完成，启动心跳
                     startHeartbeat();
                 }
 
@@ -83,13 +82,8 @@ public class WebSocketManager {
                     handleCommand(json);
                     break;
                 case "auth_response":
-                    boolean success = json.get("success").getAsBoolean();
-                    if (success) {
-                        LOGGER.info("Authentication successful");
-                    } else {
-                        LOGGER.error("Authentication failed");
-                        disconnect();
-                    }
+                    // 认证已通过 URL 查询参数完成，此分支保留兼容性
+                    LOGGER.debug("Received auth_response (auth handled via query params)");
                     break;
                 case "pong":
                     // 心跳响应
