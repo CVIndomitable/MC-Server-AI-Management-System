@@ -1,0 +1,406 @@
+# MC Server AI 管理系统 — 使用教程
+
+本教程将指导你从零开始部署和使用 AI Minecraft 服务器管理系统。
+
+---
+
+## 目录
+
+1. [环境准备](#1-环境准备)
+2. [部署后端服务](#2-部署后端服务)
+3. [安装 Minecraft 模组](#3-安装-minecraft-模组)
+4. [启动客户端](#4-启动客户端)
+5. [首次使用](#5-首次使用)
+6. [功能详解](#6-功能详解)
+7. [常见问题](#7-常见问题)
+
+---
+
+## 1. 环境准备
+
+### 必须安装
+
+| 工具 | 版本要求 | 用途 |
+|------|----------|------|
+| Python | 3.11+ | 运行后端服务 |
+| Node.js | 18+ | 运行客户端 |
+| Java | 21 | 构建 Minecraft 模组 |
+| Docker + Docker Compose | 最新版 | 部署后端（推荐方式） |
+
+### 需要准备的账号/密钥
+
+- **Anthropic API Key** — 用于 AI 对话功能，在 [console.anthropic.com](https://console.anthropic.com) 获取
+- **一台云服务器** — 用于部署后端（1 核 1G 即可），需有公网 IP
+- **Minecraft 1.21.1 服务器** — 需安装 NeoForge，能访问外网（模组会主动出站连接云服务器）
+
+---
+
+## 2. 部署后端服务
+
+后端是整个系统的中枢，负责 AI 对话和指令中转。
+
+### 2.1 获取代码
+
+```bash
+# 将 mc-admin-server 目录上传到你的云服务器
+scp -r mc-admin-server/ user@your-server:/opt/mc-admin-server
+```
+
+### 2.2 配置环境变量
+
+```bash
+cd /opt/mc-admin-server
+
+# 复制示例配置
+cp .env.example .env
+
+# 编辑配置文件
+vim .env
+```
+
+`.env` 文件需要填写以下关键配置：
+
+```properties
+# 服务地址
+HOST=0.0.0.0
+PORT=8000
+
+# JWT 密钥（随机生成一个长字符串）
+SECRET_KEY=你的随机密钥字符串
+
+# Anthropic API 配置
+ANTHROPIC_API_KEY=sk-ant-api03-你的密钥
+MODEL_NAME=claude-haiku-4-5
+
+# Redis（使用 Docker 部署则保持默认）
+REDIS_HOST=redis
+REDIS_PORT=6379
+
+# 模组认证 Token（自定义一个，模组端需要配置相同的值）
+MOD_AUTH_TOKEN=你的自定义token
+```
+
+> **安全提醒**：`SECRET_KEY` 和 `MOD_AUTH_TOKEN` 请使用足够复杂的随机字符串，不要使用示例值。
+
+### 2.3 Docker 部署（推荐）
+
+```bash
+# 启动后端和 Redis
+docker compose up -d
+
+# 查看运行状态
+docker compose ps
+
+# 查看日志
+docker compose logs -f api
+```
+
+启动成功后，后端会监听 `http://your-server-ip:8000`。
+
+### 2.4 本地部署（开发/调试用）
+
+```bash
+# 安装依赖
+pip install -r requirements.txt
+
+# 本地需要单独启动 Redis
+# macOS: brew install redis && redis-server
+# Linux: sudo apt install redis-server
+
+# 启动后端
+python run.py
+```
+
+### 2.5 验证后端是否正常
+
+浏览器打开 `http://your-server-ip:8000/docs`，如果能看到 Swagger API 文档页面，说明后端启动成功。
+
+---
+
+## 3. 安装 Minecraft 模组
+
+模组安装在你的 MC 服务器上，负责执行指令和上报状态。
+
+### 3.1 构建模组
+
+```bash
+cd mc-admin-mod
+
+# 构建
+./gradlew build
+```
+
+构建产物位于 `build/libs/mcadmin-mod-1.0.0.jar`。
+
+### 3.2 安装到 MC 服务器
+
+```bash
+# 将 jar 文件复制到 MC 服务器的 mods 目录
+cp build/libs/mcadmin-mod-1.0.0.jar /path/to/minecraft-server/mods/
+```
+
+### 3.3 配置模组
+
+首次启动 MC 服务器后，模组会在 `config/` 目录下生成默认配置。你也可以提前手动创建：
+
+```bash
+# 在 MC 服务器目录下创建配置
+mkdir -p config
+vim config/mcadmin.properties
+```
+
+配置内容：
+
+```properties
+# 云服务器后端的 WebSocket 地址
+ws.url=ws://your-server-ip:8000/ws/mod
+
+# 认证 Token（必须和后端 .env 中的 MOD_AUTH_TOKEN 一致）
+ws.token=你的自定义token
+
+# 服务器标识（用于区分多个 MC 服务器）
+server.id=srv_001
+
+# 状态上报间隔（毫秒），默认 5 秒
+status.report_interval=5000
+
+# 危险操作是否需要二次确认
+security.require_confirmation=true
+```
+
+> **重要**：`ws.token` 的值必须和后端 `.env` 中的 `MOD_AUTH_TOKEN` 完全一致，否则连接会被拒绝。
+
+### 3.4 启动 MC 服务器
+
+正常启动你的 MC 服务器即可。查看服务器日志，如果看到类似以下内容说明模组连接成功：
+
+```
+[MCAdmin] WebSocket connected to ws://your-server-ip:8000/ws/mod
+[MCAdmin] Status reporting started (interval: 5000ms)
+```
+
+---
+
+## 4. 启动客户端
+
+客户端支持网页版和手机 App，用于与 AI 对话和查看服务器状态。
+
+### 4.1 安装依赖
+
+```bash
+cd mc-admin-client
+npm install
+```
+
+### 4.2 配置后端地址
+
+```bash
+# 复制示例配置
+cp .env.example .env
+
+# 编辑配置
+vim .env
+```
+
+```properties
+EXPO_PUBLIC_API_URL=http://your-server-ip:8000
+EXPO_PUBLIC_WS_URL=ws://your-server-ip:8000/ws
+```
+
+将 `your-server-ip` 替换为你的云服务器公网 IP。
+
+### 4.3 启动开发服务器
+
+```bash
+# 网页版（推荐先用这个测试）
+npm run web
+
+# 或启动 Expo 开发服务器（支持手机扫码预览）
+npm start
+```
+
+网页版启动后，浏览器会自动打开 `http://localhost:8081`。
+
+### 4.4 手机端
+
+```bash
+# iOS 模拟器
+npm run ios
+
+# Android 模拟器
+npm run android
+
+# 或使用 Expo Go App 扫描终端中的二维码
+npm start
+```
+
+---
+
+## 5. 首次使用
+
+### 5.1 登录
+
+打开客户端后，你会看到登录页面。使用默认账号登录：
+
+- **用户名**：`admin`
+- **密码**：`admin123`
+
+> **安全提醒**：这是开发用的默认账号。正式使用前，请修改 `mc-admin-server/app/api/auth.py` 中的账号密码配置。
+
+### 5.2 聊天界面
+
+登录后进入聊天界面，这是你与 AI 管理员交互的主要方式。你可以用自然语言描述你想做的事情：
+
+**示例对话：**
+
+```
+你：服务器现在状态怎么样？
+AI：当前服务器运行正常，TPS 19.8，在线玩家 3 人（Steve, Alex, Notch），
+    内存使用 2048MB / 4096MB。
+
+你：把 Steve 设为管理员
+AI：已执行 /op Steve，Steve 现在是服务器管理员了。
+
+你：服务器有点卡，踢掉所有人然后重启
+AI：这是一个危险操作，需要确认：
+    1. 踢出所有在线玩家（3人）
+    2. 重启服务器
+    确认执行吗？
+```
+
+### 5.3 状态面板
+
+切换到「状态」标签页，可以实时查看：
+
+- **TPS** — 服务器每秒 Tick 数，正常值为 20
+- **内存占用** — 图表展示内存使用趋势
+- **在线玩家列表** — 当前所有在线玩家
+
+数据由模组每 5 秒自动上报更新。
+
+### 5.4 快捷操作
+
+切换到「操作」标签页，提供常用的一键操作按钮：
+
+- **重启服务器** — 安全关闭并重启
+- **发送公告** — 向全服玩家广播消息
+- **备份存档** — 触发世界存档备份
+- **保存世界** — 立即执行 save-all
+
+危险操作（如重启）会弹出确认对话框。
+
+---
+
+## 6. 功能详解
+
+### 6.1 AI 支持的管理操作
+
+通过自然语言，AI 可以帮你执行以下操作：
+
+| 操作类型 | 示例指令 | 对应 MC 命令 |
+|----------|----------|--------------|
+| 执行命令 | "把时间设为白天" | `/time set day` |
+| 管理权限 | "给 Steve op" | `/op Steve` |
+| 踢出玩家 | "踢掉 Alex" | `/kick Alex` |
+| 封禁玩家 | "把 Griefer 封了" | `/ban Griefer` |
+| 解封玩家 | "解封 Griefer" | `/pardon Griefer` |
+| 白名单 | "把 Steve 加入白名单" | `/whitelist add Steve` |
+| 广播消息 | "告诉所有人10分钟后重启" | `/say 10分钟后重启` |
+| 修改天气 | "把天气改成晴天" | `/weather clear` |
+| 传送玩家 | "把 Alex 传送到 Steve 那里" | `/tp Alex Steve` |
+| 查看状态 | "服务器现在怎么样" | 返回 TPS/玩家/内存信息 |
+
+### 6.2 命令白名单
+
+出于安全考虑，模组只允许执行以下命令：
+
+`list`, `say`, `op`, `deop`, `kick`, `ban`, `pardon`, `whitelist`, `save-all`, `time`, `weather`, `gamemode`, `tp`, `give`
+
+不在白名单内的命令会被拒绝执行。如需扩展，修改 `mc-admin-mod` 中 `CommandExecutor.java` 的白名单配置。
+
+### 6.3 多轮对话
+
+AI 会记住对话上下文（每个服务器最多保留 50 条消息），支持连续追问：
+
+```
+你：服务器里有谁在线？
+AI：当前在线 3 人：Steve, Alex, Notch。
+
+你：把第一个人踢了
+AI：已踢出 Steve。
+
+你：再把第二个也踢了
+AI：已踢出 Alex。
+```
+
+### 6.4 安全机制
+
+- **Token 认证** — 模组与后端之间的 WebSocket 连接需要 Token 验证
+- **JWT 认证** — 客户端与后端之间使用 JWT Token
+- **命令白名单** — 只有预定义的安全命令才能执行
+- **危险操作确认** — 重启、批量踢人等操作需要二次确认
+
+---
+
+## 7. 常见问题
+
+### 模组连接不上后端
+
+**检查清单：**
+
+1. 确认 `mcadmin.properties` 中的 `ws.url` 地址正确，包含端口号
+2. 确认 `ws.token` 与后端 `.env` 中的 `MOD_AUTH_TOKEN` 一致
+3. 确认云服务器防火墙开放了 8000 端口
+4. 确认 MC 服务器能访问外网（`ping your-server-ip`）
+5. 查看 MC 服务器日志中的错误信息
+
+### 客户端无法登录
+
+1. 确认 `.env` 中的 `EXPO_PUBLIC_API_URL` 地址正确
+2. 确认后端服务正在运行（`docker compose ps`）
+3. 确认使用了正确的账号密码（默认 `admin` / `admin123`）
+4. 检查浏览器控制台是否有 CORS 错误
+
+### AI 回复"无法连接到服务器"
+
+1. 确认模组已成功连接后端（后端日志中能看到 WebSocket 连接记录）
+2. 确认 `.env` 中的 `ANTHROPIC_API_KEY` 配置正确且有余额
+3. 检查后端日志：`docker compose logs -f api`
+
+### 状态面板不更新
+
+1. 确认模组 WebSocket 连接正常
+2. 确认客户端 WebSocket 连接正常（查看浏览器控制台）
+3. 尝试刷新页面重新连接
+
+### iOS/Android 构建问题
+
+- 确保使用 Expo SDK 54 及对应版本的依赖
+- iOS 需要在 Xcode 中配置好开发者证书
+- Android 需要配置好 Android SDK 环境
+- 使用 `npx expo-doctor` 检查依赖兼容性
+- 详见 [Expo 官方文档](https://docs.expo.dev)
+
+### 模组构建失败
+
+- 确认安装了 Java 21（`java -version`）
+- 确认 Gradle Wrapper 存在（`ls mc-admin-mod/gradlew`）
+- 如遇网络问题，配置 Gradle 代理或使用镜像仓库
+- 首次构建需下载大量依赖，请耐心等待
+
+---
+
+## 附录：完整部署流程速查
+
+```
+1. 云服务器部署后端
+   mc-admin-server/ → 配置 .env → docker compose up -d
+
+2. MC 服务器安装模组
+   mc-admin-mod/ → ./gradlew build → 复制 jar 到 mods/ → 配置 mcadmin.properties → 启动 MC
+
+3. 本地启动客户端
+   mc-admin-client/ → npm install → 配置 .env → npm run web
+
+4. 打开浏览器 → 登录 → 开始用自然语言管理服务器
+```
