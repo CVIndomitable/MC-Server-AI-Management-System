@@ -29,12 +29,26 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  review?: ReviewInfo;
+}
+
+// 审核信息
+export interface ReviewInfo {
+  status: 'approved' | 'rejected' | 'pending_confirmation';
+  risk_level: 'low' | 'medium' | 'high';
+  reviewed_by: string;
+  reason?: string;
+  suggestion?: string;
+  pending_id?: string;
+  command?: string;
+  expires_in?: number;
 }
 
 // AI聊天API响应
 export interface ChatApiResponse {
   message: string;
   command_executed?: any;
+  review?: ReviewInfo;
   timestamp: string;
 }
 

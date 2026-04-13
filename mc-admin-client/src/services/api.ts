@@ -3,7 +3,7 @@ import { CONFIG } from '../utils/config';
 import {
   ApiResponse, AuthCredentials, AuthToken, ChatApiResponse,
   UserServerInfo, ServerInfo, BindRequestInfo, ServerUserInfo,
-  UserInfo, ModelTier, MemoryResponse,
+  UserInfo, ModelTier, MemoryResponse, ReviewInfo,
 } from '../types';
 
 class ApiService {
@@ -130,6 +130,25 @@ class ApiService {
         return { success: false, error: '服务器未连接' };
       }
       return { success: false, error: this.getChineseError(error, '发送消息失败') };
+    }
+  }
+
+  // ---- 命令审核确认 ----
+
+  async confirmPendingCommand(
+    pendingId: string,
+    action: 'approve' | 'reject',
+  ): Promise<ApiResponse<{ message: string; output?: string; command?: string }>> {
+    try {
+      const response = await this.client.post(
+        `/api/v1/chat/confirm/${pendingId}?action=${action}`
+      );
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        return { success: false, error: '确认请求已过期' };
+      }
+      return { success: false, error: this.getChineseError(error, '操作失败') };
     }
   }
 

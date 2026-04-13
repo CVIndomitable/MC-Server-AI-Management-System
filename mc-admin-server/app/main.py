@@ -7,7 +7,8 @@ from app.core.database import user_db
 from app.services.memory import memory_service
 from app.services.memory_consolidator import memory_consolidator
 from app.services.command_cache import command_cache
-from app.services.ai_agent import ai_agent
+from app.services.command_reviewer import command_reviewer
+from app.services.ai_agent import ai_agent, client as anthropic_client
 from config.settings import settings
 import logging
 
@@ -29,10 +30,12 @@ async def lifespan(app: FastAPI):
     try:
         await memory_service.init()
         await command_cache.init()
+        command_reviewer.ai_client = anthropic_client
+        await command_reviewer.init()
         await memory_consolidator.start(
             get_conversation_fn=lambda server_id: ai_agent.conversation_history.get(server_id, [])
         )
-        logger.info("记忆系统 + 命令缓存已启动")
+        logger.info("记忆系统 + 命令缓存 + 命令审核已启动")
     except Exception as e:
         logger.warning(f"记忆系统启动失败（Redis 可能未运行）: {e}")
 
@@ -40,6 +43,7 @@ async def lifespan(app: FastAPI):
 
     # 关闭：清理资源
     await memory_consolidator.stop()
+    await command_reviewer.close()
     await command_cache.close()
     await memory_service.close()
 

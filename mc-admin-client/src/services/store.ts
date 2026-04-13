@@ -223,6 +223,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         role: 'assistant',
         content: result.data.message,
         timestamp: Date.now(),
+        review: result.data.review,
       };
       addChatMessage(aiMessage);
     } else {

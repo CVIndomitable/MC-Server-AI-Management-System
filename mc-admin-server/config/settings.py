@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     cache_ttl_seconds: int = 3600  # 命令缓存过期时间（秒），默认1小时
     cache_max_size: int = 500       # 最大缓存条目数
 
+    # 命令审核配置
+    review_ai_enabled: bool = True          # 是否启用AI审核层
+    review_confirm_timeout: int = 120       # 人工确认超时时间（秒）
+    review_burst_window: int = 30           # 频率检测时间窗口（秒）
+    review_burst_threshold: int = 3         # 频率检测阈值
+    review_give_amount_threshold: int = 1000  # give命令数量异常阈值
+
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173", "http://192.168.1.6:8081", "*"]
 
     @field_validator("secret_key", "anthropic_api_key", "mod_auth_token")

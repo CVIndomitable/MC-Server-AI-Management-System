@@ -32,9 +32,20 @@ class ChatRequest(BaseModel):
     query_only: bool = False  # 仅查询模式：AI只建议不执行
     model_tier: Optional[Literal["flash", "standard", "pro"]] = None  # 模型级别覆盖
 
+class ReviewInfo(BaseModel):
+    status: str  # "approved" | "rejected" | "pending_confirmation"
+    risk_level: str  # "low" | "medium" | "high"
+    reviewed_by: str = "rule_engine"  # "rule_engine" | "ai_reviewer" | "user"
+    reason: Optional[str] = None
+    suggestion: Optional[str] = None
+    pending_id: Optional[str] = None
+    command: Optional[str] = None
+    expires_in: Optional[int] = None
+
 class ChatResponse(BaseModel):
     message: str
     command_executed: Optional[dict] = None
+    review: Optional[ReviewInfo] = None
     timestamp: datetime
 
 class ServerStatus(BaseModel):

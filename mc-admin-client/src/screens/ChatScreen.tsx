@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useAppStore } from '../services/store';
 import { ChatMessage, ModelTier } from '../types';
+import ReviewCard from '../components/ReviewCard';
 
 const MODEL_OPTIONS: { label: string; value: ModelTier | undefined; desc: string }[] = [
   { label: '自动', value: undefined, desc: '系统自动选择' },
@@ -48,22 +49,43 @@ export default function ChatScreen() {
 
   const currentModelLabel = MODEL_OPTIONS.find(m => m.value === modelTier)?.label || '自动';
 
-  const renderMessage = ({ item }: { item: ChatMessage }) => (
-    <View
-      style={[
-        styles.messageBubble,
-        item.role === 'user' ? styles.userBubble : styles.assistantBubble,
-      ]}
-    >
-      <Text style={styles.messageText}>{item.content}</Text>
-      <Text style={styles.timestamp}>
-        {new Date(item.timestamp).toLocaleTimeString('zh-CN', {
-          hour: '2-digit',
-          minute: '2-digit',
-        })}
-      </Text>
-    </View>
-  );
+  const { addChatMessage } = useAppStore();
+
+  const renderMessage = ({ item }: { item: ChatMessage }) => {
+    // 高危命令需要确认时，渲染 ReviewCard
+    if (item.review?.status === 'pending_confirmation' && item.review.pending_id) {
+      return (
+        <ReviewCard
+          review={item.review}
+          onResult={(msg) => {
+            addChatMessage({
+              id: Date.now().toString(36) + Math.random().toString(36).substring(2),
+              role: 'assistant',
+              content: msg,
+              timestamp: Date.now(),
+            });
+          }}
+        />
+      );
+    }
+
+    return (
+      <View
+        style={[
+          styles.messageBubble,
+          item.role === 'user' ? styles.userBubble : styles.assistantBubble,
+        ]}
+      >
+        <Text style={styles.messageText}>{item.content}</Text>
+        <Text style={styles.timestamp}>
+          {new Date(item.timestamp).toLocaleTimeString('zh-CN', {
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+        </Text>
+      </View>
+    );
+  };
 
   return (
     <KeyboardAvoidingView
