@@ -48,3 +48,30 @@ export interface AuthToken {
   access_token: string;
   token_type: string;
 }
+
+// 服务器管理
+export interface UserServerInfo {
+  server_id: string;
+  name: string;
+  role: string; // owner | admin
+  online: boolean;
+  bound_at: string;
+}
+
+export interface ServerInfo {
+  server_id: string;
+  name: string;
+  online: boolean;
+  created_at: string;
+  last_seen_at?: string;
+}
+
+export interface BindRequestInfo {
+  id: number;
+  username: string;
+  server_id: string;
+  status: string; // pending | approved | rejected
+  created_at: string;
+  resolved_at?: string;
+  resolved_by?: string;
+}

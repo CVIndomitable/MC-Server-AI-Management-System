@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
-import { Text, View, ActivityIndicator, StyleSheet } from 'react-native';
+import { Text, View, ActivityIndicator, StyleSheet, TouchableOpacity } from 'react-native';
 
 import LoginScreen from './src/screens/LoginScreen';
+import ServerSelectScreen from './src/screens/ServerSelectScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import StatusScreen from './src/screens/StatusScreen';
 import ActionsScreen from './src/screens/ActionsScreen';
@@ -13,6 +14,8 @@ import { useAppStore } from './src/services/store';
 const Tab = createBottomTabNavigator();
 
 function MainTabs() {
+  const { clearServerSelection, serverId } = useAppStore();
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -26,6 +29,14 @@ function MainTabs() {
           backgroundColor: '#2a2a2a',
         },
         headerTintColor: '#fff',
+        headerRight: () => (
+          <TouchableOpacity
+            style={{ marginRight: 12, paddingHorizontal: 8, paddingVertical: 4 }}
+            onPress={clearServerSelection}
+          >
+            <Text style={{ color: '#007AFF', fontSize: 13 }}>切换服务器</Text>
+          </TouchableOpacity>
+        ),
       }}
     >
       <Tab.Screen
@@ -57,12 +68,12 @@ function MainTabs() {
 }
 
 export default function App() {
-  const { isAuthenticated, restoreSession } = useAppStore();
+  const { isAuthenticated, serverSelected, restoreSession, clearServerSelection } = useAppStore();
   const [showMain, setShowMain] = useState(false);
+  const [showServerSelect, setShowServerSelect] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // 启动时恢复会话
     const initApp = async () => {
       try {
         await restoreSession();
@@ -77,9 +88,18 @@ export default function App() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      setShowMain(true);
+      if (serverSelected) {
+        setShowMain(true);
+        setShowServerSelect(false);
+      } else {
+        setShowServerSelect(true);
+        setShowMain(false);
+      }
+    } else {
+      setShowMain(false);
+      setShowServerSelect(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, serverSelected]);
 
   if (isLoading) {
     return (
@@ -92,15 +112,33 @@ export default function App() {
     );
   }
 
+  // 登录 → 选服务器 → 主界面
+  if (!isAuthenticated) {
+    return (
+      <>
+        <StatusBar style="light" />
+        <LoginScreen onLoginSuccess={() => {}} />
+      </>
+    );
+  }
+
+  if (showServerSelect && !showMain) {
+    return (
+      <>
+        <StatusBar style="light" />
+        <ServerSelectScreen onServerSelected={() => {
+          setShowMain(true);
+          setShowServerSelect(false);
+        }} />
+      </>
+    );
+  }
+
   return (
     <>
       <StatusBar style="light" />
       <NavigationContainer>
-        {showMain ? (
-          <MainTabs />
-        ) : (
-          <LoginScreen onLoginSuccess={() => setShowMain(true)} />
-        )}
+        <MainTabs />
       </NavigationContainer>
     </>
   );

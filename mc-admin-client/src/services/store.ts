@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
-import { ServerStatus, ChatMessage } from '../types';
+import { ServerStatus, ChatMessage, UserServerInfo, ServerInfo } from '../types';
 import apiService from '../services/api';
 import wsService from '../services/websocket';
 
@@ -17,6 +17,11 @@ interface AppState {
   isAuthenticated: boolean;
   token: string | null;
   serverId: string;
+  serverSelected: boolean; // 是否已选择服务器
+
+  // 服务器列表
+  myServers: UserServerInfo[];
+  unboundServers: ServerInfo[];
 
   // 服务器状态
   serverStatus: ServerStatus | null;
@@ -37,6 +42,10 @@ interface AppState {
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
   setServerId: (id: string) => void;
+  selectServer: (id: string) => void;
+  fetchMyServers: () => Promise<void>;
+  fetchUnboundServers: () => Promise<void>;
+  bindServer: (serverId: string) => Promise<{ success: boolean; error?: string }>;
   updateServerStatus: (status: ServerStatus) => void;
   addChatMessage: (message: ChatMessage) => void;
   sendMessage: (content: string) => Promise<void>;
@@ -45,12 +54,16 @@ interface AppState {
   setError: (error: string | null) => void;
   restoreSession: () => Promise<void>;
   toggleQueryOnlyMode: () => void;
+  clearServerSelection: () => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
   isAuthenticated: false,
   token: null,
-  serverId: 'srv_001', // 默认服务器ID
+  serverId: '',
+  serverSelected: false,
+  myServers: [],
+  unboundServers: [],
   serverStatus: null,
   chatMessages: [],
   isLoading: false,
@@ -93,10 +106,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     // 清除持久化数据
     AsyncStorage.removeItem(TOKEN_KEY);
+    AsyncStorage.removeItem(SERVER_ID_KEY);
 
     set({
       isAuthenticated: false,
       token: null,
+      serverId: '',
+      serverSelected: false,
+      myServers: [],
+      unboundServers: [],
       chatMessages: [],
       serverStatus: null
     });
@@ -104,6 +122,42 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setServerId: (id: string) => {
     set({ serverId: id });
+    AsyncStorage.setItem(SERVER_ID_KEY, id);
+  },
+
+  selectServer: (id: string) => {
+    set({ serverId: id, serverSelected: true, chatMessages: [] });
+    AsyncStorage.setItem(SERVER_ID_KEY, id);
+  },
+
+  clearServerSelection: () => {
+    get().disconnectWebSocket();
+    set({ serverId: '', serverSelected: false, chatMessages: [], serverStatus: null });
+    AsyncStorage.removeItem(SERVER_ID_KEY);
+  },
+
+  fetchMyServers: async () => {
+    const result = await apiService.getMyServers();
+    if (result.success && result.data) {
+      set({ myServers: result.data.servers });
+    }
+  },
+
+  fetchUnboundServers: async () => {
+    const result = await apiService.getUnboundServers();
+    if (result.success && result.data) {
+      set({ unboundServers: result.data.servers });
+    }
+  },
+
+  bindServer: async (serverId: string) => {
+    const result = await apiService.bindServer(serverId);
+    if (result.success) {
+      // 绑定成功，刷新列表
+      await get().fetchMyServers();
+      return { success: true };
+    }
+    return { success: false, error: result.error };
   },
 
   updateServerStatus: (status: ServerStatus) => {
@@ -218,7 +272,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({
           isAuthenticated: true,
           token,
-          serverId: serverId || 'srv_001',
+          serverId: serverId || '',
+          serverSelected: !!serverId,
           queryOnlyMode: queryOnly === 'true',
         });
       }

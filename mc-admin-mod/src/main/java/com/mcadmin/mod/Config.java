@@ -4,9 +4,12 @@ import com.google.gson.JsonObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Properties;
+import java.util.UUID;
 
 public class Config {
     private static final Logger LOGGER = LoggerFactory.getLogger(Config.class);
@@ -16,6 +19,7 @@ public class Config {
 
     static {
         loadConfig();
+        ensureServerId();
     }
 
     private static void loadConfig() {
@@ -25,15 +29,44 @@ public class Config {
         } catch (IOException e) {
             LOGGER.warn("Config file not found, using defaults");
             setDefaults();
+            saveConfig();
         }
     }
 
     private static void setDefaults() {
         props.setProperty("ws.url", "ws://your-server-address/mc-admin/ws/mod");
         props.setProperty("ws.token", "change-me-in-config-file");
-        props.setProperty("server.id", "srv_001");
+        // server.id 留空，由 ensureServerId() 自动生成
+        props.setProperty("server.id", "");
         props.setProperty("status.report_interval", "5000");
         props.setProperty("security.require_confirmation", "true");
+    }
+
+    /**
+     * 确保 server.id 存在，如果为空或未设置则自动生成唯一ID并写回配置文件
+     */
+    private static void ensureServerId() {
+        String currentId = props.getProperty("server.id", "").trim();
+        if (currentId.isEmpty()) {
+            String generated = "mc_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+            props.setProperty("server.id", generated);
+            saveConfig();
+            LOGGER.info("Auto-generated server.id: {}", generated);
+        }
+    }
+
+    /**
+     * 将当前配置写回文件
+     */
+    private static void saveConfig() {
+        File configFile = new File(CONFIG_FILE);
+        configFile.getParentFile().mkdirs();
+        try (FileOutputStream fos = new FileOutputStream(configFile)) {
+            props.store(fos, "MCAdmin Mod Configuration");
+            LOGGER.info("Config saved to {}", CONFIG_FILE);
+        } catch (IOException e) {
+            LOGGER.error("Failed to save config: {}", e.getMessage());
+        }
     }
 
     public static String getWsUrl() {
@@ -45,7 +78,7 @@ public class Config {
     }
 
     public static String getServerId() {
-        return props.getProperty("server.id", "srv_001");
+        return props.getProperty("server.id");
     }
 
     public static long getReportInterval() {

@@ -23,6 +23,14 @@ class ConnectionManager:
             return False
 
         await websocket.accept()
+
+        # 自动注册服务器到数据库
+        try:
+            from app.core.database import user_db
+            await user_db.register_server(server_id)
+        except Exception as e:
+            logger.warning(f"服务器自动注册失败: {e}")
+
         async with self._lock:
             self.active_connections[server_id] = websocket
             self.server_status[server_id] = {
@@ -30,7 +38,7 @@ class ConnectionManager:
                 "last_update": datetime.now(),
                 "data": {}
             }
-        logger.info(f"Server {server_id} connected")
+        logger.info(f"Server {server_id} connected and registered")
         return True
 
     async def disconnect(self, server_id: str):

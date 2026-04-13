@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, chat, memory
+from app.api import auth, chat, memory, servers
 from app.websocket import routes as ws_routes
 from app.core.database import user_db
 from app.services.memory import memory_service
@@ -56,6 +56,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(chat.router)
+app.include_router(servers.router)
 app.include_router(memory.router)
 app.include_router(ws_routes.router)
 

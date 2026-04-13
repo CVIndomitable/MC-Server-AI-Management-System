@@ -1,6 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import { CONFIG } from '../utils/config';
-import { ApiResponse, AuthCredentials, AuthToken, ChatMessage } from '../types';
+import { ApiResponse, AuthCredentials, AuthToken, ChatMessage, UserServerInfo, ServerInfo, BindRequestInfo } from '../types';
 
 class ApiService {
   private client: AxiosInstance;
@@ -110,6 +110,72 @@ class ApiService {
       }
 
       return { success: false, error: this.getChineseError(error, '操作执行失败') };
+    }
+  }
+
+  // ---- 服务器管理 ----
+
+  // 获取我绑定的服务器列表
+  async getMyServers(): Promise<ApiResponse<{ servers: UserServerInfo[] }>> {
+    try {
+      const response = await this.client.get('/api/v1/servers/my');
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      return { success: false, error: this.getChineseError(error, '获取服务器列表失败') };
+    }
+  }
+
+  // 获取未绑定的服务器列表
+  async getUnboundServers(): Promise<ApiResponse<{ servers: ServerInfo[] }>> {
+    try {
+      const response = await this.client.get('/api/v1/servers/unbound');
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      return { success: false, error: this.getChineseError(error, '获取未绑定服务器失败') };
+    }
+  }
+
+  // 绑定服务器（第一人→owner，后续→创建申请）
+  async bindServer(serverId: string): Promise<ApiResponse<UserServerInfo>> {
+    try {
+      const response = await this.client.post(`/api/v1/servers/${serverId}/bind`);
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      // 202 表示已提交申请等待审批
+      if (error.response?.status === 202) {
+        return { success: false, error: error.response.data?.detail || '已提交绑定申请，等待主管理员审批' };
+      }
+      return { success: false, error: this.getChineseError(error, '绑定服务器失败') };
+    }
+  }
+
+  // 获取待审批的绑定申请
+  async getBindRequests(serverId: string): Promise<ApiResponse<{ requests: BindRequestInfo[] }>> {
+    try {
+      const response = await this.client.get(`/api/v1/servers/${serverId}/requests`);
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      return { success: false, error: this.getChineseError(error, '获取绑定申请失败') };
+    }
+  }
+
+  // 批准绑定申请
+  async approveBindRequest(serverId: string, requestId: number): Promise<ApiResponse> {
+    try {
+      const response = await this.client.post(`/api/v1/servers/${serverId}/requests/${requestId}/approve`);
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      return { success: false, error: this.getChineseError(error, '审批失败') };
+    }
+  }
+
+  // 拒绝绑定申请
+  async rejectBindRequest(serverId: string, requestId: number): Promise<ApiResponse> {
+    try {
+      const response = await this.client.post(`/api/v1/servers/${serverId}/requests/${requestId}/reject`);
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      return { success: false, error: this.getChineseError(error, '审批失败') };
     }
   }
 

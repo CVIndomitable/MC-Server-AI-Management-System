@@ -76,6 +76,51 @@ class UserListResponse(BaseModel):
     users: List[UserInfo]
 
 
+# 服务器管理模型
+class ServerInfo(BaseModel):
+    server_id: str
+    name: str
+    online: bool = False
+    created_at: str
+    last_seen_at: Optional[str] = None
+
+class UserServerInfo(BaseModel):
+    server_id: str
+    name: str
+    role: str  # owner | admin
+    online: bool = False
+    bound_at: str
+
+class UserServerListResponse(BaseModel):
+    servers: List[UserServerInfo]
+
+class UnboundServerListResponse(BaseModel):
+    servers: List[ServerInfo]
+
+class BindRequestInfo(BaseModel):
+    id: int
+    username: str
+    server_id: str
+    status: str  # pending | approved | rejected
+    created_at: str
+    resolved_at: Optional[str] = None
+    resolved_by: Optional[str] = None
+
+class BindRequestListResponse(BaseModel):
+    requests: List[BindRequestInfo]
+
+class UpdateServerNameRequest(BaseModel):
+    name: str
+
+class ServerUserInfo(BaseModel):
+    username: str
+    role: str
+    bound_at: str
+
+class ServerUserListResponse(BaseModel):
+    users: List[ServerUserInfo]
+
+
 # 记忆系统模型
 class MemoryUpdateRequest(BaseModel):
     content: str  # Markdown格式的记忆文本

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from app.models.schemas import ChatRequest, ChatResponse, ServerStatus
 from app.core.auth import verify_token
+from app.core.permissions import require_server_access
 from app.services.ai_agent import ai_agent
 from app.services.memory import memory_service
 from app.websocket.manager import manager
@@ -13,13 +14,14 @@ router = APIRouter(prefix="/api/v1", tags=["chat"])
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
+    # 权限检查：用户必须绑定该服务器
+    admin_id = user.get("sub", "admin")
+    await require_server_access(admin_id, request.server_id, min_role="admin")
+
     if not await manager.is_online(request.server_id):
         raise HTTPException(status_code=503, detail="服务器未连接")
 
     current_status = await manager.get_status(request.server_id)
-
-    # 从 JWT 中提取管理员ID
-    admin_id = user.get("sub", "admin")
 
     # 记录会话活跃时间（用于记忆整理超时检测）
     try:
@@ -131,6 +133,10 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
 
 @router.get("/status/{server_id}", response_model=ServerStatus)
 async def get_server_status(server_id: str, user: dict = Depends(verify_token)):
+    # 权限检查：用户必须绑定该服务器
+    username = user.get("sub")
+    await require_server_access(username, server_id, min_role="admin")
+
     status = await manager.get_status(server_id)
     if not status:
         raise HTTPException(status_code=404, detail="服务器不存在")
