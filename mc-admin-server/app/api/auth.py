@@ -1,17 +1,34 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from app.models.schemas import (
     LoginRequest, Token, RegisterRequest, ChangePasswordRequest,
     ResetPasswordRequest, UserInfo, UserListResponse
 )
 from app.core.auth import create_access_token, verify_token
 from app.core.database import user_db
+from collections import defaultdict
+import time
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
+# 登录频率限制
+_login_attempts: dict[str, list[float]] = defaultdict(list)
+_LOGIN_RATE_LIMIT = 5
+_LOGIN_RATE_WINDOW = 60
+
+
+def _check_login_rate(request: Request):
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    _login_attempts[client_ip] = [t for t in _login_attempts[client_ip] if now - t < _LOGIN_RATE_WINDOW]
+    if len(_login_attempts[client_ip]) >= _LOGIN_RATE_LIMIT:
+        raise HTTPException(status_code=429, detail="登录尝试过于频繁，请稍后再试")
+    _login_attempts[client_ip].append(now)
+
 
 @router.post("/login", response_model=Token)
-async def login(request: LoginRequest):
+async def login(request: LoginRequest, http_request: Request):
     """用户登录"""
+    _check_login_rate(http_request)
     user = await user_db.authenticate(request.username, request.password)
     if not user:
         raise HTTPException(status_code=401, detail="用户名或密码错误")
@@ -24,8 +41,6 @@ async def register(request: RegisterRequest, current_user: dict = Depends(verify
     """注册新用户（仅管理员）"""
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="仅管理员可创建用户")
-    if len(request.password) < 6:
-        raise HTTPException(status_code=400, detail="密码长度不能少于6位")
     if request.role not in ("admin", "user"):
         raise HTTPException(status_code=400, detail="角色只能是 admin 或 user")
     user = await user_db.create_user(request.username, request.password, request.role)

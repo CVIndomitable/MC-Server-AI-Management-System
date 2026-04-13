@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     review_burst_threshold: int = 3         # 频率检测阈值
     review_give_amount_threshold: int = 1000  # give命令数量异常阈值
 
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173", "http://192.168.1.6:8081", "*"]
+    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173", "http://192.168.1.6:8081"]
 
     @field_validator("secret_key", "anthropic_api_key", "mod_auth_token")
     @classmethod
@@ -40,8 +40,6 @@ class Settings(BaseSettings):
             raise ValueError(f"{info.field_name} must not be empty")
         return v
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    model_config = {"env_file": ".env", "case_sensitive": False}
 
 settings = Settings()

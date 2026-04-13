@@ -1,7 +1,7 @@
 import aiosqlite
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from app.core.auth import get_password_hash, verify_password
 
 logger = logging.getLogger(__name__)
@@ -74,7 +74,7 @@ class UserDatabase:
         """创建用户，返回用户信息；用户名重复返回 None"""
         try:
             async with aiosqlite.connect(self.db_path) as db:
-                now = datetime.utcnow().isoformat()
+                now = datetime.now(timezone.utc).isoformat()
                 await db.execute(
                     "INSERT INTO users (username, hashed_password, role, created_at) VALUES (?, ?, ?, ?)",
                     (username, get_password_hash(password), role, now)
@@ -143,7 +143,7 @@ class UserDatabase:
 
     async def register_server(self, server_id: str) -> dict:
         """注册服务器（mod连接时自动调用），已存在则更新 last_seen_at"""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("PRAGMA foreign_keys=ON")
             # INSERT OR IGNORE + UPDATE 保证幂等
@@ -196,7 +196,7 @@ class UserDatabase:
 
     async def bind_user_to_server(self, username: str, server_id: str, role: str = "admin") -> dict | None:
         """绑定用户到服务器，返回绑定信息；重复绑定返回 None"""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         try:
             async with aiosqlite.connect(self.db_path) as db:
                 await db.execute("PRAGMA foreign_keys=ON")
@@ -278,7 +278,7 @@ class UserDatabase:
 
     async def create_bind_request(self, username: str, server_id: str) -> dict | None:
         """创建绑定申请，同用户同服务器已有 pending 则返回 None"""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("PRAGMA foreign_keys=ON")
             # 检查是否已有 pending 申请
@@ -314,7 +314,7 @@ class UserDatabase:
 
     async def resolve_bind_request(self, request_id: int, approved: bool, resolved_by: str) -> dict | None:
         """审批绑定申请，返回申请信息；不存在或已处理返回 None"""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         status = "approved" if approved else "rejected"
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("PRAGMA foreign_keys=ON")

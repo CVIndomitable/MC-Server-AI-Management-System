@@ -17,55 +17,38 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["chat"])
 
 
-def _extract_command_from_tool_call(tool_name: str, tool_input: dict) -> str:
-    """从工具调用中提取实际要执行的MC命令"""
+def _tool_to_mc_command(tool_name: str, tool_input: dict) -> str | None:
+    """将工具调用转换为MC命令字符串，非命令类工具返回None"""
     if tool_name == "execute_command":
         return tool_input.get("command", "")
-    elif tool_name == "kick_player":
+    if tool_name == "kick_player":
         cmd = f"/kick {tool_input['player']}"
         if "reason" in tool_input:
             cmd += f" {tool_input['reason']}"
         return cmd
-    elif tool_name == "op_player":
+    if tool_name == "op_player":
         return f"/op {tool_input['player']}"
-    elif tool_name == "deop_player":
+    if tool_name == "deop_player":
         return f"/deop {tool_input['player']}"
-    elif tool_name == "get_status":
-        return "get_status"
-    elif tool_name == "restart_server":
-        return "restart_server"
-    elif tool_name == "broadcast":
+    if tool_name == "broadcast":
         return f"/say {tool_input['message']}"
-    return tool_name
+    return None
+
+
+def _extract_command_from_tool_call(tool_name: str, tool_input: dict) -> str:
+    """从工具调用中提取命令字符串（用于审核）"""
+    return _tool_to_mc_command(tool_name, tool_input) or tool_name
 
 
 async def _execute_tool(server_id: str, tool_name: str, tool_input: dict, current_status: dict) -> dict:
-    """执行单个工具调用，返回结果"""
-    if tool_name == "execute_command":
-        return await manager.send_command(
-            server_id, "execute", {"command": tool_input["command"]}
-        )
-    elif tool_name == "kick_player":
-        cmd = f"/kick {tool_input['player']}"
-        if "reason" in tool_input:
-            cmd += f" {tool_input['reason']}"
-        return await manager.send_command(server_id, "execute", {"command": cmd})
-    elif tool_name == "op_player":
-        return await manager.send_command(
-            server_id, "execute", {"command": f"/op {tool_input['player']}"}
-        )
-    elif tool_name == "deop_player":
-        return await manager.send_command(
-            server_id, "execute", {"command": f"/deop {tool_input['player']}"}
-        )
-    elif tool_name == "get_status":
+    """执行单个工具调用"""
+    if tool_name == "get_status":
         return {"success": True, "output": str(current_status)}
-    elif tool_name == "restart_server":
+    if tool_name == "restart_server":
         return await manager.send_command(server_id, "restart", {})
-    elif tool_name == "broadcast":
-        return await manager.send_command(
-            server_id, "execute", {"command": f"/say {tool_input['message']}"}
-        )
+    mc_cmd = _tool_to_mc_command(tool_name, tool_input)
+    if mc_cmd is not None:
+        return await manager.send_command(server_id, "execute", {"command": mc_cmd})
     return {"success": False, "output": f"未知工具: {tool_name}"}
 
 
@@ -97,7 +80,7 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
         )
     except Exception as e:
         logger.error(f"AI processing failed: {e}")
-        raise HTTPException(status_code=500, detail=f"AI处理失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="AI处理失败，请稍后重试")
 
     # 仅查询模式下跳过工具执行
     if request.query_only:
@@ -153,7 +136,7 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
                     "result": result,
                 })
                 ai_agent.add_tool_result(
-                    request.server_id, tool_call["id"], result.get("output", "")
+                    admin_id, request.server_id, tool_call["id"], result.get("output", "")
                 )
             except Exception as e:
                 logger.error(f"Tool execution failed for {tool_name}: {e}")
@@ -162,7 +145,7 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
                     "tool": tool_name, "input": tool_input, "result": error_result,
                 })
                 ai_agent.add_tool_result(
-                    request.server_id, tool_call["id"], error_result["output"]
+                    admin_id, request.server_id, tool_call["id"], error_result["output"]
                 )
 
         elif review_result.decision == ReviewDecision.REJECTED:
@@ -178,7 +161,7 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
                 suggestion=review_result.suggested_alternative,
             )
             ai_agent.add_tool_result(
-                request.server_id, tool_call["id"], f"审核拒绝: {review_result.reason}"
+                admin_id, request.server_id, tool_call["id"], f"审核拒绝: {review_result.reason}"
             )
             return ChatResponse(
                 message=reject_msg,
@@ -206,7 +189,7 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
                 expires_in=settings.review_confirm_timeout,
             )
             ai_agent.add_tool_result(
-                request.server_id, tool_call["id"], f"等待人工确认: {review_result.reason}"
+                admin_id, request.server_id, tool_call["id"], f"等待人工确认: {review_result.reason}"
             )
             return ChatResponse(
                 message="这是一个高风险操作，需要你确认后才会执行：",
@@ -253,7 +236,7 @@ async def confirm_pending_command(
                 server_id, tool_call["name"], tool_call["input"], current_status
             )
             ai_agent.add_tool_result(
-                server_id, tool_call["id"], result.get("output", "")
+                admin_id, server_id, tool_call["id"], result.get("output", "")
             )
         except Exception as e:
             result = {"success": False, "output": f"执行失败: {str(e)}"}
@@ -268,7 +251,7 @@ async def confirm_pending_command(
     else:
         # 拒绝 → 取消
         ai_agent.add_tool_result(
-            server_id, tool_call["id"], "用户取消了此操作"
+            admin_id, server_id, tool_call["id"], "用户取消了此操作"
         )
         await command_reviewer.delete_pending_command(pending_id)
         return {

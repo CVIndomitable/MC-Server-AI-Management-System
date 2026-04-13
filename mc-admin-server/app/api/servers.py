@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import JSONResponse
 from app.models.schemas import (
     UserServerInfo, UserServerListResponse, UnboundServerListResponse,
     ServerInfo, BindRequestInfo, BindRequestListResponse,
@@ -92,9 +93,9 @@ async def bind_server(server_id: str, user: dict = Depends(verify_token)):
     if not request:
         raise HTTPException(status_code=409, detail="创建申请失败")
 
-    raise HTTPException(
+    return JSONResponse(
         status_code=202,
-        detail="已提交绑定申请，等待主管理员审批"
+        content={"message": "已提交绑定申请，等待主管理员审批"}
     )
 
 

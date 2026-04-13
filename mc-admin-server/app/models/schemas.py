@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List, Literal
 from datetime import datetime
 
@@ -27,7 +27,7 @@ class ChatMessage(BaseModel):
     content: str
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(max_length=2000)
     server_id: str
     query_only: bool = False  # 仅查询模式：AI只建议不执行
     model_tier: Optional[Literal["flash", "standard", "pro"]] = None  # 模型级别覆盖
@@ -67,8 +67,8 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 class RegisterRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=2, max_length=32, pattern=r'^[a-zA-Z0-9_]+$')
+    password: str = Field(min_length=6)
     role: str = "user"
 
 class ChangePasswordRequest(BaseModel):

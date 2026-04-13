@@ -5,15 +5,15 @@ import asyncio
 import json
 import logging
 import time
-from typing import Optional
+from typing import Optional, Callable
 
-from anthropic import Anthropic
+from anthropic import AsyncAnthropic
 from config.settings import settings
 from app.services.memory import memory_service
 
 logger = logging.getLogger(__name__)
 
-client = Anthropic(
+client = AsyncAnthropic(
     api_key=settings.anthropic_api_key,
     base_url=settings.anthropic_base_url,
 )
@@ -122,7 +122,7 @@ async def consolidate_session(admin_id: str, server_id: str, conversation_histor
 
     try:
         # 使用 flash 模型整理，节省费用
-        response = client.messages.create(
+        response = await client.messages.create(
             model=settings.model_flash,
             max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
@@ -182,7 +182,7 @@ async def _compress_memory(mem_type: str, content: str) -> Optional[str]:
     limit = limits.get(mem_type, 1000)
 
     try:
-        response = client.messages.create(
+        response = await client.messages.create(
             model=settings.model_flash,
             max_tokens=2048,
             messages=[{
@@ -212,12 +212,13 @@ class MemoryConsolidator:
     def __init__(self):
         self._task: Optional[asyncio.Task] = None
         self._running = False
+        self._get_conversation: Optional[Callable] = None
 
     async def start(self, get_conversation_fn):
         """启动后台定时任务
 
         Args:
-            get_conversation_fn: 获取对话历史的回调函数 (server_id) -> list
+            get_conversation_fn: 获取对话历史的回调函数 (admin_id, server_id) -> list
         """
         self._running = True
         self._get_conversation = get_conversation_fn
@@ -257,7 +258,7 @@ class MemoryConsolidator:
             session_key = session["_key"]
 
             # 获取对话历史
-            conversation = self._get_conversation(server_id)
+            conversation = self._get_conversation(admin_id, server_id)
             if conversation:
                 await consolidate_session(admin_id, server_id, conversation)
 

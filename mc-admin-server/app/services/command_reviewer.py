@@ -9,7 +9,6 @@ import time
 import json
 import logging
 import uuid
-from collections import defaultdict
 from typing import Optional
 
 import redis.asyncio as aioredis
@@ -34,7 +33,7 @@ class CommandReviewer:
     def __init__(self, ai_client=None):
         self.ai_client = ai_client
         # 会话级命令历史: key=(user_id, server_id), value=[(timestamp, command, target_player)]
-        self._command_history: dict[tuple, list] = defaultdict(list)
+        self._command_history: dict[tuple, list] = {}
         self._redis: Optional[aioredis.Redis] = None
 
     async def init(self):
@@ -137,7 +136,7 @@ class CommandReviewer:
     ) -> RiskLevel:
         current_risk = base_risk
         now = time.time()
-        history = self._command_history[session_key]
+        history = self._command_history.get(session_key, [])
         window = settings.review_burst_window
 
         # 频率检测
@@ -216,11 +215,11 @@ AI生成的命令：{command}
                     suggested_alternative=result.get("suggestion"),
                 )
         except Exception as e:
-            logger.warning(f"AI审核调用失败，降级为放行: {e}")
+            logger.warning(f"AI审核调用失败，升级为人工确认: {e}")
             return ReviewResult(
-                decision=ReviewDecision.APPROVED,
+                decision=ReviewDecision.PENDING,
                 risk_level=RiskLevel.MEDIUM,
-                reason="AI审核服务异常，降级放行",
+                reason="AI审核服务异常，需人工确认",
                 original_command=command,
                 reviewed_by="rule_engine",
             )
@@ -263,11 +262,15 @@ AI生成的命令：{command}
 
     def _record_command(self, session_key: tuple, command: str):
         target = self._extract_target_player(command)
+        if session_key not in self._command_history:
+            self._command_history[session_key] = []
         self._command_history[session_key].append((time.time(), command, target))
         cutoff = time.time() - 300
         self._command_history[session_key] = [
             h for h in self._command_history[session_key] if h[0] > cutoff
         ]
+        if not self._command_history[session_key]:
+            del self._command_history[session_key]
 
     def _get_high_risk_reason(self, command: str, tool_name: str, session_key: tuple) -> str:
         reasons = []
@@ -284,7 +287,7 @@ AI生成的命令：{command}
 
         # 频率/多目标原因
         now = time.time()
-        history = self._command_history[session_key]
+        history = self._command_history.get(session_key, [])
         recent = [h for h in history if now - h[0] < settings.review_burst_window]
         recent_targets = {h[2] for h in recent if h[2]}
         target = self._extract_target_player(command)

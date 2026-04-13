@@ -1,4 +1,4 @@
-from anthropic import Anthropic
+from anthropic import AsyncAnthropic
 from config.settings import settings
 from typing import List, Dict, Any, Optional
 from app.services.memory import memory_service
@@ -11,7 +11,7 @@ import copy
 
 logger = logging.getLogger(__name__)
 
-client = Anthropic(
+client = AsyncAnthropic(
     api_key=settings.anthropic_api_key,
     base_url=settings.anthropic_base_url,
 )
@@ -23,7 +23,6 @@ SYSTEM_PROMPT_BASE = """你是一个Minecraft服务器管理助手。你可以�
 - op_player: 给予玩家OP权限
 - deop_player: 移除玩家OP权限
 - get_status: 获取服务器状态
-- get_logs: 获取最近日志
 - restart_server: 重启服务器
 - broadcast: 发送全服公告
 
@@ -125,7 +124,7 @@ TOOLS = [
 
 class AIAgent:
     def __init__(self):
-        self.conversation_history: Dict[str, List[Dict]] = {}
+        self.conversation_history: Dict[tuple, List[Dict]] = {}
         self.max_history_length = 50
 
     def _resolve_model(self, message: str, query_only: bool, model_tier: Optional[str]) -> str:
@@ -157,20 +156,21 @@ class AIAgent:
         return settings.model_flash
 
     async def process_message(self, user_message: str, server_id: str, current_status: dict = None, query_only: bool = False, model_tier: Optional[str] = None, admin_id: str = "admin") -> Dict[str, Any]:
-        if server_id not in self.conversation_history:
-            self.conversation_history[server_id] = []
+        hkey = (admin_id, server_id)
+        if hkey not in self.conversation_history:
+            self.conversation_history[hkey] = []
 
         user_msg = {"role": "user", "content": user_message}
         if current_status:
             user_msg["content"] += f"\n\n当前服务器状态：{json.dumps(current_status, ensure_ascii=False)}"
 
-        self.conversation_history[server_id].append(user_msg)
-        self._trim_history(server_id)
+        self.conversation_history[hkey].append(user_msg)
+        self._trim_history(hkey)
 
         # ---- 命令缓存：相同消息直接复用上次的工具调用 ----
         if not query_only:
             try:
-                cached = await command_cache.get(user_message)
+                cached = await command_cache.get(user_message, server_id)
             except Exception as e:
                 logger.warning(f"缓存查询失败，跳过: {e}")
                 cached = None
@@ -198,7 +198,7 @@ class AIAgent:
                         "name": tc["name"],
                         "input": copy.deepcopy(tc["input"]),
                     })
-                self.conversation_history[server_id].append({
+                self.conversation_history[hkey].append({
                     "role": "assistant",
                     "content": content_blocks,
                 })
@@ -215,15 +215,15 @@ class AIAgent:
             "model": model,
             "max_tokens": 2048,
             "system": system_prompt,
-            "messages": self.conversation_history[server_id],
+            "messages": self.conversation_history[hkey],
         }
         if not query_only:
             create_params["tools"] = TOOLS
 
-        response = client.messages.create(**create_params)
+        response = await client.messages.create(**create_params)
 
         assistant_msg = {"role": "assistant", "content": response.content}
-        self.conversation_history[server_id].append(assistant_msg)
+        self.conversation_history[hkey].append(assistant_msg)
 
         result = {
             "text": "",
@@ -244,19 +244,20 @@ class AIAgent:
         # 缓存包含工具调用的结果到 Redis
         if not query_only:
             try:
-                await command_cache.put(user_message, result)
+                await command_cache.put(user_message, server_id, result)
             except Exception as e:
                 logger.warning(f"缓存写入失败: {e}")
 
         return result
 
-    def add_tool_result(self, server_id: str, tool_use_id: str, result: str):
-        if server_id not in self.conversation_history or not self.conversation_history[server_id]:
+    def add_tool_result(self, admin_id: str, server_id: str, tool_use_id: str, result: str):
+        hkey = (admin_id, server_id)
+        if hkey not in self.conversation_history or not self.conversation_history[hkey]:
             return
 
-        last_msg = self.conversation_history[server_id][-1]
+        last_msg = self.conversation_history[hkey][-1]
         if last_msg["role"] != "user":
-            self.conversation_history[server_id].append({
+            self.conversation_history[hkey].append({
                 "role": "user",
                 "content": [{
                     "type": "tool_result",
@@ -283,8 +284,8 @@ class AIAgent:
             logger.warning(f"记忆加载失败，使用基础 prompt: {e}")
         return base_prompt
 
-    def _trim_history(self, server_id: str):
-        if len(self.conversation_history[server_id]) > self.max_history_length:
-            self.conversation_history[server_id] = self.conversation_history[server_id][-self.max_history_length:]
+    def _trim_history(self, hkey):
+        if len(self.conversation_history[hkey]) > self.max_history_length:
+            self.conversation_history[hkey] = self.conversation_history[hkey][-self.max_history_length:]
 
 ai_agent = AIAgent()

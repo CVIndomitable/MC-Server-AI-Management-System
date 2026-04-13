@@ -16,6 +16,53 @@ class ConnectionManager:
         self.server_status: Dict[str, dict] = {}
         self.pending_commands: Dict[str, asyncio.Future] = {}
         self._lock = asyncio.Lock()
+        self._cleanup_task: Optional[asyncio.Task] = None
+
+    async def start_cleanup(self):
+        """启动僵死连接清理任务"""
+        self._cleanup_task = asyncio.create_task(self._cleanup_loop())
+        logger.info("WebSocket 僵死连接清理任务已启动")
+
+    async def stop_cleanup(self):
+        """停止清理任务"""
+        if self._cleanup_task:
+            self._cleanup_task.cancel()
+            try:
+                await self._cleanup_task
+            except asyncio.CancelledError:
+                pass
+
+    async def _cleanup_loop(self):
+        """每30秒检查一次僵死连接"""
+        while True:
+            try:
+                await asyncio.sleep(30)
+                await self._remove_stale_connections()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"连接清理出错: {e}")
+
+    async def _remove_stale_connections(self):
+        """移除超过60秒无状态上报的连接"""
+        now = datetime.now()
+        stale = []
+        async with self._lock:
+            for server_id, status in self.server_status.items():
+                if server_id in self.active_connections:
+                    last_update = status.get("last_update")
+                    if last_update and (now - last_update).total_seconds() > 60:
+                        stale.append(server_id)
+        for server_id in stale:
+            logger.warning(f"服务器 {server_id} 心跳超时，断开连接")
+            async with self._lock:
+                ws = self.active_connections.get(server_id)
+            if ws:
+                try:
+                    await ws.close(code=1000, reason="Heartbeat timeout")
+                except Exception:
+                    pass
+            await self.disconnect(server_id)
 
     async def connect(self, websocket: WebSocket, server_id: str, token: str):
         if token != settings.mod_auth_token:
