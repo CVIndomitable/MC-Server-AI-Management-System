@@ -2,10 +2,10 @@ from anthropic import Anthropic
 from config.settings import settings
 from typing import List, Dict, Any, Optional
 from app.services.memory import memory_service
+from app.services.command_cache import command_cache
 import json
 import re
 import logging
-import time
 import uuid
 import copy
 
@@ -127,42 +127,6 @@ class AIAgent:
     def __init__(self):
         self.conversation_history: Dict[str, List[Dict]] = {}
         self.max_history_length = 50
-        # 命令缓存：相同消息跳过大模型调用，直接复用工具调用结果
-        self.command_cache: Dict[str, Dict[str, Any]] = {}
-        self.cache_ttl = settings.cache_ttl_seconds
-        self.cache_max_size = settings.cache_max_size
-
-    def _get_cache_key(self, message: str) -> str:
-        """生成缓存key：规范化消息文本"""
-        return message.strip().lower()
-
-    def _check_cache(self, cache_key: str) -> Optional[Dict[str, Any]]:
-        """检查缓存是否命中且未过期"""
-        entry = self.command_cache.get(cache_key)
-        if entry is None:
-            return None
-        if time.time() - entry["timestamp"] < self.cache_ttl:
-            return entry["result"]
-        del self.command_cache[cache_key]
-        return None
-
-    def _store_cache(self, cache_key: str, result: Dict[str, Any]):
-        """缓存包含工具调用的AI响应"""
-        if not result.get("tool_calls"):
-            return
-        # 超出上限时清理最旧的条目
-        if len(self.command_cache) >= self.cache_max_size:
-            oldest_key = min(self.command_cache, key=lambda k: self.command_cache[k]["timestamp"])
-            del self.command_cache[oldest_key]
-        self.command_cache[cache_key] = {
-            "result": copy.deepcopy(result),
-            "timestamp": time.time(),
-        }
-
-    def clear_cache(self):
-        """清空命令缓存"""
-        self.command_cache.clear()
-        logger.info("命令缓存已清空")
 
     def _resolve_model(self, message: str, query_only: bool, model_tier: Optional[str]) -> str:
         """根据消息内容和参数选择合适的模型"""
@@ -205,15 +169,17 @@ class AIAgent:
 
         # ---- 命令缓存：相同消息直接复用上次的工具调用 ----
         if not query_only:
-            cache_key = self._get_cache_key(user_message)
-            cached = self._check_cache(cache_key)
+            try:
+                cached = await command_cache.get(user_message)
+            except Exception as e:
+                logger.warning(f"缓存查询失败，跳过: {e}")
+                cached = None
             if cached:
                 logger.info(f"[{server_id}] 缓存命中，跳过大模型调用: '{user_message[:40]}'")
-                # 用新的 tool_use_id 替换，避免ID冲突
                 result = {
                     "text": cached["text"],
                     "tool_calls": [],
-                    "model_used": cached["model_used"],
+                    "model_used": cached.get("model_used", "cache"),
                     "cache_hit": True,
                 }
                 content_blocks = []
@@ -275,9 +241,12 @@ class AIAgent:
                     "input": block.input
                 })
 
-        # 缓存包含工具调用的结果
+        # 缓存包含工具调用的结果到 Redis
         if not query_only:
-            self._store_cache(cache_key, result)
+            try:
+                await command_cache.put(user_message, result)
+            except Exception as e:
+                logger.warning(f"缓存写入失败: {e}")
 
         return result
 
