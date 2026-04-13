@@ -1,7 +1,11 @@
 from anthropic import Anthropic
 from config.settings import settings
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import json
+import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 client = Anthropic(
     api_key=settings.anthropic_api_key,
@@ -31,6 +35,20 @@ QUERY_ONLY_PROMPT = """你是一个Minecraft服务器管理助手，当前处于
 
 请用中文回复，给出清晰的指令建议，但**绝对不要尝试调用任何工具**。
 如果用户提供了当前服务器状态，你可以基于状态数据进行分析和建议。"""
+
+# 模型路由关键词
+PRO_KEYWORDS = re.compile(
+    r"分析原因|诊断|排查|崩溃|全面检查|深度|优化方案|性能调优"
+)
+# 组合信号：问题词 + 技术词 → pro
+QUESTION_WORDS = re.compile(r"为什么|怎么|如何")
+TECH_WORDS = re.compile(r"TPS|tps|内存|日志|报错|错误|延迟|卡顿")
+
+STANDARD_KEYWORDS = re.compile(
+    r"为什么|怎么办|原因|怎么|如何|什么意思|解释"
+    r"|所有|批量|每个|逐个|清理"
+)
+SMART_MSG_LENGTH_THRESHOLD = 80
 
 TOOLS = [
     {
@@ -106,7 +124,35 @@ class AIAgent:
         self.conversation_history: Dict[str, List[Dict]] = {}
         self.max_history_length = 50
 
-    async def process_message(self, user_message: str, server_id: str, current_status: dict = None, query_only: bool = False) -> Dict[str, Any]:
+    def _resolve_model(self, message: str, query_only: bool, model_tier: Optional[str]) -> str:
+        """根据消息内容和参数选择合适的模型"""
+        # 1. 客户端指定
+        if model_tier == "pro":
+            return settings.model_pro
+        if model_tier == "standard":
+            return settings.model_standard
+        if model_tier == "flash":
+            return settings.model_flash
+
+        # 2. query_only 固定用 flash
+        if query_only:
+            return settings.model_flash
+
+        # 3. 关键词升级到 pro
+        if PRO_KEYWORDS.search(message):
+            return settings.model_pro
+        # 组合信号：问题词 + 技术词
+        if QUESTION_WORDS.search(message) and TECH_WORDS.search(message):
+            return settings.model_pro
+
+        # 4. 关键词升级到 standard
+        if STANDARD_KEYWORDS.search(message) or len(message) > SMART_MSG_LENGTH_THRESHOLD:
+            return settings.model_standard
+
+        # 5. 默认 flash
+        return settings.model_flash
+
+    async def process_message(self, user_message: str, server_id: str, current_status: dict = None, query_only: bool = False, model_tier: Optional[str] = None) -> Dict[str, Any]:
         if server_id not in self.conversation_history:
             self.conversation_history[server_id] = []
 
@@ -118,8 +164,11 @@ class AIAgent:
         self._trim_history(server_id)
 
         # 仅查询模式：不传工具，使用建议型系统提示词
+        model = self._resolve_model(user_message, query_only, model_tier)
+        logger.info(f"[{server_id}] 模型路由: {model} (tier={model_tier}, query_only={query_only}, msg_len={len(user_message)})")
+
         create_params = {
-            "model": settings.model_name,
+            "model": model,
             "max_tokens": 2048,
             "system": QUERY_ONLY_PROMPT if query_only else SYSTEM_PROMPT,
             "messages": self.conversation_history[server_id],
@@ -134,7 +183,8 @@ class AIAgent:
 
         result = {
             "text": "",
-            "tool_calls": []
+            "tool_calls": [],
+            "model_used": model,
         }
 
         for block in response.content:

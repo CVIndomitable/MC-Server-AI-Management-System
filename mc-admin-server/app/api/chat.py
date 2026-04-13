@@ -22,7 +22,8 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
             request.message,
             request.server_id,
             current_status.get("data") if current_status else None,
-            query_only=request.query_only
+            query_only=request.query_only,
+            model_tier=request.model_tier,
         )
     except Exception as e:
         logger.error(f"AI processing failed: {e}")

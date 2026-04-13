@@ -11,7 +11,9 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str
     anthropic_base_url: str = "https://api.anthropic.com"
-    model_name: str = "claude-haiku-4-5"
+    model_flash: str = "MiMo-V2-Flash"
+    model_standard: str = "MiMo-V2-Omni"
+    model_pro: str = "mimo-v2-pro"
 
     redis_host: str = "localhost"
     redis_port: int = 6379

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import datetime
 
 # WebSocket消息模型
@@ -30,6 +30,7 @@ class ChatRequest(BaseModel):
     message: str
     server_id: str
     query_only: bool = False  # 仅查询模式：AI只建议不执行
+    model_tier: Optional[Literal["flash", "standard", "pro"]] = None  # 模型级别覆盖
 
 class ChatResponse(BaseModel):
     message: str
