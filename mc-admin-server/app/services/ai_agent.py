@@ -3,7 +3,10 @@ from config.settings import settings
 from typing import List, Dict, Any
 import json
 
-client = Anthropic(api_key=settings.anthropic_api_key)
+client = Anthropic(
+    api_key=settings.anthropic_api_key,
+    base_url=settings.anthropic_base_url,
+)
 
 SYSTEM_PROMPT = """你是一个Minecraft服务器管理助手。你可以通过以下工具管理服务器：
 

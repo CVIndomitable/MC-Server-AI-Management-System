@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
-import { Text } from 'react-native';
+import { Text, View, ActivityIndicator, StyleSheet } from 'react-native';
 
 import LoginScreen from './src/screens/LoginScreen';
 import ChatScreen from './src/screens/ChatScreen';
@@ -64,8 +64,13 @@ export default function App() {
   useEffect(() => {
     // 启动时恢复会话
     const initApp = async () => {
-      await restoreSession();
-      setIsLoading(false);
+      try {
+        await restoreSession();
+      } catch (error) {
+        console.error('应用初始化失败:', error);
+      } finally {
+        setIsLoading(false);
+      }
     };
     initApp();
   }, []);
@@ -77,7 +82,14 @@ export default function App() {
   }, [isAuthenticated]);
 
   if (isLoading) {
-    return null; // 或显示启动画面
+    return (
+      <View style={styles.loadingContainer}>
+        <StatusBar style="light" />
+        <Text style={styles.loadingLogo}>⛏️</Text>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>加载中...</Text>
+      </View>
+    );
   }
 
   return (
@@ -93,3 +105,21 @@ export default function App() {
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingLogo: {
+    fontSize: 64,
+    marginBottom: 24,
+  },
+  loadingText: {
+    color: '#888',
+    fontSize: 16,
+    marginTop: 16,
+  },
+});

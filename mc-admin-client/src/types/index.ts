@@ -45,6 +45,6 @@ export interface AuthCredentials {
 }
 
 export interface AuthToken {
-  token: string;
-  expires_at: number;
+  access_token: string;
+  token_type: string;
 }

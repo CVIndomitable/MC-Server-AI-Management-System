@@ -1,6 +1,9 @@
 import { create } from 'zustand';
-import { v4 as uuidv4 } from 'uuid';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+function generateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2);
+}
 import { ServerStatus, ChatMessage } from '../types';
 import apiService from '../services/api';
 import wsService from '../services/websocket';
@@ -58,7 +61,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const result = await apiService.login({ username, password });
 
     if (result.success && result.data) {
-      const { token } = result.data;
+      const token = result.data.access_token;
       apiService.setToken(token);
 
       // 持久化token
@@ -70,8 +73,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         isLoading: false
       });
 
-      // 登录成功后连接WebSocket
-      get().connectWebSocket();
       return true;
     } else {
       set({
@@ -116,7 +117,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     // 添加用户消息
     const userMessage: ChatMessage = {
-      id: uuidv4(),
+      id: generateId(),
       role: 'user',
       content,
       timestamp: Date.now(),
@@ -128,11 +129,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     const result = await apiService.sendChatMessage(content, serverId);
 
     if (result.success && result.data) {
-      addChatMessage(result.data);
+      const aiMessage: ChatMessage = {
+        id: generateId(),
+        role: 'assistant',
+        content: result.data.message,
+        timestamp: Date.now(),
+      };
+      addChatMessage(aiMessage);
     } else {
       // 添加错误消息
       const errorMessage: ChatMessage = {
-        id: uuidv4(),
+        id: generateId(),
         role: 'assistant',
         content: `错误: ${result.error}`,
         timestamp: Date.now(),
@@ -161,7 +168,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         updateServerStatus(message.data);
       } else if (message.type === 'chat_response' && message.message) {
         const chatMessage: ChatMessage = {
-          id: uuidv4(),
+          id: generateId(),
           role: 'assistant',
           content: message.message,
           timestamp: Date.now(),
@@ -208,9 +215,6 @@ export const useAppStore = create<AppState>((set, get) => ({
           token,
           serverId: serverId || 'srv_001',
         });
-
-        // 恢复会话后连接WebSocket
-        get().connectWebSocket();
       }
     } catch (error) {
       console.error('恢复会话失败:', error);

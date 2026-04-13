@@ -1,10 +1,21 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl } from 'react-native';
 import { useAppStore } from '../services/store';
 import { LineChart } from 'react-native-chart-kit';
+import apiService from '../services/api';
 
 export default function StatusScreen() {
-  const { serverStatus, wsConnected } = useAppStore();
+  const { serverStatus, wsConnected, serverId, updateServerStatus } = useAppStore();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    const result = await apiService.getServerStatus(serverId);
+    if (result.success && result.data) {
+      updateServerStatus(result.data);
+    }
+    setRefreshing(false);
+  };
 
   if (!serverStatus) {
     return (
@@ -24,7 +35,12 @@ export default function StatusScreen() {
   const tpsColor = serverStatus.tps >= 19 ? '#4CAF50' : serverStatus.tps >= 15 ? '#FF9800' : '#F44336';
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#007AFF" />
+      }
+    >
       {/* 连接状态指示器 */}
       <View style={styles.connectionStatus}>
         <View style={[styles.statusDot, wsConnected ? styles.connected : styles.disconnected]} />

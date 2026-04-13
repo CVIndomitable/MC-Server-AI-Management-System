@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 10080
 
     anthropic_api_key: str
+    anthropic_base_url: str = "https://api.anthropic.com"
     model_name: str = "claude-haiku-4-5"
 
     redis_host: str = "localhost"
@@ -18,7 +19,7 @@ class Settings(BaseSettings):
 
     mod_auth_token: str
 
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173", "http://192.168.1.6:8081", "*"]
 
     @field_validator("secret_key", "anthropic_api_key", "mod_auth_token")
     @classmethod

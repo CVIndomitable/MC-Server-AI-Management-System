@@ -38,7 +38,6 @@ class ApiService {
       const response = await this.client.post('/api/v1/auth/login', credentials);
       return { success: true, data: response.data };
     } catch (error: any) {
-      const message = error.response?.data?.message || error.message || '登录失败';
       const statusCode = error.response?.status;
 
       if (statusCode === 401) {
@@ -48,10 +47,10 @@ class ApiService {
       } else if (error.code === 'ECONNABORTED') {
         return { success: false, error: '请求超时，请检查网络连接' };
       } else if (!error.response) {
-        return { success: false, error: '网络连接失败，请检查网络' };
+        return { success: false, error: '无法连接服务器，请检查网络' };
       }
 
-      return { success: false, error: message };
+      return { success: false, error: this.getChineseError(error, '登录失败') };
     }
   }
 
@@ -64,15 +63,15 @@ class ApiService {
       });
       return { success: true, data: response.data };
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || '发送失败';
-
       if (!error.response) {
-        return { success: false, error: '网络连接失败' };
+        return { success: false, error: '无法连接服务器，请检查网络' };
+      } else if (error.code === 'ECONNABORTED') {
+        return { success: false, error: '请求超时，请稍后重试' };
       } else if (error.response.status === 401) {
-        return { success: false, error: '认证失败，请重新登录' };
+        return { success: false, error: '认证已过期，请重新登录' };
       }
 
-      return { success: false, error: errorMessage };
+      return { success: false, error: this.getChineseError(error, '发送消息失败') };
     }
   }
 
@@ -82,13 +81,13 @@ class ApiService {
       const response = await this.client.get(`/api/v1/servers/${serverId}/status`);
       return { success: true, data: response.data };
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || '获取状态失败';
-
       if (!error.response) {
-        return { success: false, error: '网络连接失败' };
+        return { success: false, error: '无法连接服务器，请检查网络' };
+      } else if (error.code === 'ECONNABORTED') {
+        return { success: false, error: '请求超时，请稍后重试' };
       }
 
-      return { success: false, error: errorMessage };
+      return { success: false, error: this.getChineseError(error, '获取状态失败') };
     }
   }
 
@@ -101,16 +100,28 @@ class ApiService {
       });
       return { success: true, data: response.data };
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || '操作失败';
-
       if (!error.response) {
-        return { success: false, error: '网络连接失败' };
+        return { success: false, error: '无法连接服务器，请检查网络' };
+      } else if (error.code === 'ECONNABORTED') {
+        return { success: false, error: '请求超时，请稍后重试' };
       } else if (error.response.status === 403) {
-        return { success: false, error: '权限不足' };
+        return { success: false, error: '权限不足，无法执行此操作' };
       }
 
-      return { success: false, error: errorMessage };
+      return { success: false, error: this.getChineseError(error, '操作执行失败') };
     }
+  }
+
+  // 将错误信息转为中文，避免暴露英文错误给用户
+  private getChineseError(error: any, fallback: string): string {
+    const status = error.response?.status;
+    if (status === 400) return '请求参数错误';
+    if (status === 401) return '认证已过期，请重新登录';
+    if (status === 403) return '权限不足';
+    if (status === 404) return '请求的资源不存在';
+    if (status === 429) return '请求过于频繁，请稍后重试';
+    if (status >= 500) return '服务器内部错误，请稍后重试';
+    return fallback;
   }
 }
 
