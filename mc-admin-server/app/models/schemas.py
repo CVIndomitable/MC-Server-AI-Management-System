@@ -55,6 +55,26 @@ class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    role: str = "user"
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+class ResetPasswordRequest(BaseModel):
+    new_password: str
+
+class UserInfo(BaseModel):
+    username: str
+    role: str
+    created_at: str
+
+class UserListResponse(BaseModel):
+    users: List[UserInfo]
+
 
 # 记忆系统模型
 class MemoryUpdateRequest(BaseModel):

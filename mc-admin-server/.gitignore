@@ -17,3 +17,4 @@ ENV/
 dist/
 build/
 *.egg-info/
+data/

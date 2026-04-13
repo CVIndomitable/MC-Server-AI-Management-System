@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import auth, chat, memory
 from app.websocket import routes as ws_routes
+from app.core.database import user_db
 from app.services.memory import memory_service
 from app.services.memory_consolidator import memory_consolidator
 from app.services.ai_agent import ai_agent
@@ -19,6 +20,10 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 启动：初始化用户数据库
+    await user_db.init()
+    await user_db.ensure_default_admin()
+
     # 启动：初始化记忆服务和后台整理任务
     try:
         await memory_service.init()
