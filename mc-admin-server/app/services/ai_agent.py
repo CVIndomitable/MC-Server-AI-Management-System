@@ -5,6 +5,9 @@ from app.services.memory import memory_service
 import json
 import re
 import logging
+import time
+import uuid
+import copy
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +127,42 @@ class AIAgent:
     def __init__(self):
         self.conversation_history: Dict[str, List[Dict]] = {}
         self.max_history_length = 50
+        # 命令缓存：相同消息跳过大模型调用，直接复用工具调用结果
+        self.command_cache: Dict[str, Dict[str, Any]] = {}
+        self.cache_ttl = settings.cache_ttl_seconds
+        self.cache_max_size = settings.cache_max_size
+
+    def _get_cache_key(self, message: str) -> str:
+        """生成缓存key：规范化消息文本"""
+        return message.strip().lower()
+
+    def _check_cache(self, cache_key: str) -> Optional[Dict[str, Any]]:
+        """检查缓存是否命中且未过期"""
+        entry = self.command_cache.get(cache_key)
+        if entry is None:
+            return None
+        if time.time() - entry["timestamp"] < self.cache_ttl:
+            return entry["result"]
+        del self.command_cache[cache_key]
+        return None
+
+    def _store_cache(self, cache_key: str, result: Dict[str, Any]):
+        """缓存包含工具调用的AI响应"""
+        if not result.get("tool_calls"):
+            return
+        # 超出上限时清理最旧的条目
+        if len(self.command_cache) >= self.cache_max_size:
+            oldest_key = min(self.command_cache, key=lambda k: self.command_cache[k]["timestamp"])
+            del self.command_cache[oldest_key]
+        self.command_cache[cache_key] = {
+            "result": copy.deepcopy(result),
+            "timestamp": time.time(),
+        }
+
+    def clear_cache(self):
+        """清空命令缓存"""
+        self.command_cache.clear()
+        logger.info("命令缓存已清空")
 
     def _resolve_model(self, message: str, query_only: bool, model_tier: Optional[str]) -> str:
         """根据消息内容和参数选择合适的模型"""
@@ -164,11 +203,45 @@ class AIAgent:
         self.conversation_history[server_id].append(user_msg)
         self._trim_history(server_id)
 
-        # 仅查询模式：不传工具，使用建议型系统提示词
+        # ---- 命令缓存：相同消息直接复用上次的工具调用 ----
+        if not query_only:
+            cache_key = self._get_cache_key(user_message)
+            cached = self._check_cache(cache_key)
+            if cached:
+                logger.info(f"[{server_id}] 缓存命中，跳过大模型调用: '{user_message[:40]}'")
+                # 用新的 tool_use_id 替换，避免ID冲突
+                result = {
+                    "text": cached["text"],
+                    "tool_calls": [],
+                    "model_used": cached["model_used"],
+                    "cache_hit": True,
+                }
+                content_blocks = []
+                if cached["text"]:
+                    content_blocks.append({"type": "text", "text": cached["text"]})
+                for tc in cached["tool_calls"]:
+                    new_id = f"cache_{uuid.uuid4().hex[:12]}"
+                    result["tool_calls"].append({
+                        "id": new_id,
+                        "name": tc["name"],
+                        "input": copy.deepcopy(tc["input"]),
+                    })
+                    content_blocks.append({
+                        "type": "tool_use",
+                        "id": new_id,
+                        "name": tc["name"],
+                        "input": copy.deepcopy(tc["input"]),
+                    })
+                self.conversation_history[server_id].append({
+                    "role": "assistant",
+                    "content": content_blocks,
+                })
+                return result
+
+        # ---- 正常调用大模型 ----
         model = self._resolve_model(user_message, query_only, model_tier)
         logger.info(f"[{server_id}] 模型路由: {model} (tier={model_tier}, query_only={query_only}, msg_len={len(user_message)})")
 
-        # 构建带记忆的 system prompt
         base_prompt = QUERY_ONLY_PROMPT_BASE if query_only else SYSTEM_PROMPT_BASE
         system_prompt = await self._build_system_prompt(base_prompt, admin_id, server_id)
 
@@ -201,6 +274,10 @@ class AIAgent:
                     "name": block.name,
                     "input": block.input
                 })
+
+        # 缓存包含工具调用的结果
+        if not query_only:
+            self._store_cache(cache_key, result)
 
         return result
 

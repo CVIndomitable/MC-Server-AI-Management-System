@@ -21,6 +21,9 @@ class Settings(BaseSettings):
 
     mod_auth_token: str
 
+    cache_ttl_seconds: int = 3600  # 命令缓存过期时间（秒），默认1小时
+    cache_max_size: int = 500       # 最大缓存条目数
+
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173", "http://192.168.1.6:8081", "*"]
 
     @field_validator("secret_key", "anthropic_api_key", "mod_auth_token")
