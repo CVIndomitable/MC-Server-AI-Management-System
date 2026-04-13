@@ -29,6 +29,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     server_id: str
+    query_only: bool = False  # 仅查询模式：AI只建议不执行
 
 class ChatResponse(BaseModel):
     message: str

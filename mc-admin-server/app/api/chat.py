@@ -21,11 +21,20 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
         ai_response = await ai_agent.process_message(
             request.message,
             request.server_id,
-            current_status.get("data") if current_status else None
+            current_status.get("data") if current_status else None,
+            query_only=request.query_only
         )
     except Exception as e:
         logger.error(f"AI processing failed: {e}")
         raise HTTPException(status_code=500, detail=f"AI处理失败: {str(e)}")
+
+    # 仅查询模式下跳过工具执行
+    if request.query_only:
+        return ChatResponse(
+            message=ai_response.get("text", ""),
+            command_executed=None,
+            timestamp=datetime.now()
+        )
 
     executed_commands = []
     for tool_call in ai_response.get("tool_calls", []):

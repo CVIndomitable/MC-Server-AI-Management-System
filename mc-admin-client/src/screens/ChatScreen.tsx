@@ -8,13 +8,14 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from 'react-native';
 import { useAppStore } from '../services/store';
 import { ChatMessage } from '../types';
 
 export default function ChatScreen() {
   const [inputText, setInputText] = useState('');
-  const { chatMessages, sendMessage, isLoading } = useAppStore();
+  const { chatMessages, sendMessage, isLoading, queryOnlyMode, toggleQueryOnlyMode } = useAppStore();
   const flatListRef = useRef<FlatList>(null);
 
   // 新消息到达时自动滚动到底部
@@ -57,6 +58,18 @@ export default function ChatScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={90}
     >
+      <View style={styles.modeBar}>
+        <Text style={styles.modeLabel}>
+          {queryOnlyMode ? '仅查询模式（只建议不执行）' : '正常模式（AI可执行操作）'}
+        </Text>
+        <Switch
+          value={queryOnlyMode}
+          onValueChange={toggleQueryOnlyMode}
+          trackColor={{ false: '#555', true: '#FF9500' }}
+          thumbColor={queryOnlyMode ? '#fff' : '#ccc'}
+        />
+      </View>
+
       <FlatList
         ref={flatListRef}
         data={chatMessages}
@@ -95,6 +108,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1a1a1a',
+  },
+  modeBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#2a2a2a',
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  modeLabel: {
+    color: '#ccc',
+    fontSize: 13,
   },
   messageList: {
     padding: 16,

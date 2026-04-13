@@ -55,11 +55,12 @@ class ApiService {
   }
 
   // 发送聊天消息
-  async sendChatMessage(message: string, serverId: string): Promise<ApiResponse<ChatMessage>> {
+  async sendChatMessage(message: string, serverId: string, queryOnly: boolean = false): Promise<ApiResponse<ChatMessage>> {
     try {
       const response = await this.client.post('/api/v1/chat', {
         message,
         server_id: serverId,
+        query_only: queryOnly,
       });
       return { success: true, data: response.data };
     } catch (error: any) {

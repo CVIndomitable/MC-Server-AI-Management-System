@@ -10,6 +10,7 @@ import wsService from '../services/websocket';
 
 const TOKEN_KEY = '@mc_admin_token';
 const SERVER_ID_KEY = '@mc_admin_server_id';
+const QUERY_ONLY_KEY = '@mc_admin_query_only';
 
 interface AppState {
   // 认证状态
@@ -27,6 +28,7 @@ interface AppState {
   isLoading: boolean;
   error: string | null;
   wsConnected: boolean;
+  queryOnlyMode: boolean; // 仅查询模式
 
   // WebSocket消息处理器引用
   wsMessageHandler: ((message: any) => void) | null;
@@ -42,6 +44,7 @@ interface AppState {
   disconnectWebSocket: () => void;
   setError: (error: string | null) => void;
   restoreSession: () => Promise<void>;
+  toggleQueryOnlyMode: () => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -53,6 +56,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   isLoading: false,
   error: null,
   wsConnected: false,
+  queryOnlyMode: false,
   wsMessageHandler: null,
 
   login: async (username: string, password: string) => {
@@ -113,7 +117,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   sendMessage: async (content: string) => {
-    const { serverId, token, addChatMessage } = get();
+    const { serverId, token, addChatMessage, queryOnlyMode } = get();
 
     // 添加用户消息
     const userMessage: ChatMessage = {
@@ -126,7 +130,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     set({ isLoading: true });
 
-    const result = await apiService.sendChatMessage(content, serverId);
+    const result = await apiService.sendChatMessage(content, serverId, queryOnlyMode);
 
     if (result.success && result.data) {
       const aiMessage: ChatMessage = {
@@ -207,6 +211,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const token = await AsyncStorage.getItem(TOKEN_KEY);
       const serverId = await AsyncStorage.getItem(SERVER_ID_KEY);
+      const queryOnly = await AsyncStorage.getItem(QUERY_ONLY_KEY);
 
       if (token) {
         apiService.setToken(token);
@@ -214,10 +219,17 @@ export const useAppStore = create<AppState>((set, get) => ({
           isAuthenticated: true,
           token,
           serverId: serverId || 'srv_001',
+          queryOnlyMode: queryOnly === 'true',
         });
       }
     } catch (error) {
       console.error('恢复会话失败:', error);
     }
+  },
+
+  toggleQueryOnlyMode: () => {
+    const newValue = !get().queryOnlyMode;
+    set({ queryOnlyMode: newValue });
+    AsyncStorage.setItem(QUERY_ONLY_KEY, String(newValue));
   },
 }));
