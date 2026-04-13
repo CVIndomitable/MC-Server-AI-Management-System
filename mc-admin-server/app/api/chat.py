@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.models.schemas import ChatRequest, ChatResponse, ServerStatus
 from app.core.auth import verify_token
 from app.services.ai_agent import ai_agent
+from app.services.memory import memory_service
 from app.websocket.manager import manager
 from datetime import datetime
 import logging
@@ -17,6 +18,15 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
 
     current_status = await manager.get_status(request.server_id)
 
+    # 从 JWT 中提取管理员ID
+    admin_id = user.get("sub", "admin")
+
+    # 记录会话活跃时间（用于记忆整理超时检测）
+    try:
+        await memory_service.update_session_active(admin_id, request.server_id)
+    except Exception as e:
+        logger.warning(f"记录会话活跃时间失败: {e}")
+
     try:
         ai_response = await ai_agent.process_message(
             request.message,
@@ -24,6 +34,7 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
             current_status.get("data") if current_status else None,
             query_only=request.query_only,
             model_tier=request.model_tier,
+            admin_id=admin_id,
         )
     except Exception as e:
         logger.error(f"AI processing failed: {e}")

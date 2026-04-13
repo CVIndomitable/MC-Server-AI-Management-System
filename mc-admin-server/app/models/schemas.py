@@ -54,3 +54,27 @@ class LoginRequest(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+# 记忆系统模型
+class MemoryUpdateRequest(BaseModel):
+    content: str  # Markdown格式的记忆文本
+
+class MemoryResponse(BaseModel):
+    content: str
+    updated_at: Optional[datetime] = None
+
+class MemoryBackupItem(BaseModel):
+    version: int
+    timestamp: datetime
+    content_preview: str  # 前100字预览
+
+class MemoryBackupListResponse(BaseModel):
+    backups: List[MemoryBackupItem]
+
+class MemoryRollbackRequest(BaseModel):
+    version: int
+
+class MemoryConsolidationStatus(BaseModel):
+    last_consolidation: Optional[datetime] = None
+    pending_sessions: int  # 等待整理的超时会话数
