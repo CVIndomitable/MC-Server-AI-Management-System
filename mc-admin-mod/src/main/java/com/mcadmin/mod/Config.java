@@ -29,19 +29,19 @@ public class Config {
     }
 
     private static void setDefaults() {
-        props.setProperty("ws.url", "ws://47.113.221.26/mc-admin/ws/mod");
-        props.setProperty("ws.token", "BeHvYrsaAoJ0oi5W8QyrwpZI_i3t7b6A");
+        props.setProperty("ws.url", "ws://your-server-address/mc-admin/ws/mod");
+        props.setProperty("ws.token", "change-me-in-config-file");
         props.setProperty("server.id", "srv_001");
         props.setProperty("status.report_interval", "5000");
         props.setProperty("security.require_confirmation", "true");
     }
 
     public static String getWsUrl() {
-        return props.getProperty("ws.url", "ws://47.113.221.26/mc-admin/ws/mod");
+        return props.getProperty("ws.url", "ws://your-server-address/mc-admin/ws/mod");
     }
 
     public static String getAuthToken() {
-        return props.getProperty("ws.token", "BeHvYrsaAoJ0oi5W8QyrwpZI_i3t7b6A");
+        return props.getProperty("ws.token", "change-me-in-config-file");
     }
 
     public static String getServerId() {
