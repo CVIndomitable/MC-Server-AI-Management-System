@@ -40,13 +40,20 @@ class ApiService {
 
   async login(credentials: AuthCredentials): Promise<ApiResponse<AuthToken>> {
     try {
-      const response = await this.client.post('/api/v1/auth/login', credentials);
-      return { success: true, data: response.data };
-    } catch (error: any) {
-      if (error.response?.status === 401) {
-        return { success: false, error: '用户名或密码错误' };
+      const url = `${this.client.defaults.baseURL}/api/v1/auth/login`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 401) return { success: false, error: '用户名或密码错误' };
+        return { success: false, error: data.detail || '登录失败' };
       }
-      return { success: false, error: this.getChineseError(error, '登录失败') };
+      return { success: true, data };
+    } catch (error: any) {
+      return { success: false, error: '无法连接服务器，请检查网络' };
     }
   }
 

@@ -371,12 +371,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   restoreSession: async () => {
     try {
       const [token, serverId, queryOnly, username, role, modelTier] = await Promise.all([
-        SecureStore.getItemAsync(TOKEN_KEY),
-        AsyncStorage.getItem(SERVER_ID_KEY),
-        AsyncStorage.getItem(QUERY_ONLY_KEY),
-        AsyncStorage.getItem(USERNAME_KEY),
-        AsyncStorage.getItem(ROLE_KEY),
-        AsyncStorage.getItem(MODEL_TIER_KEY),
+        SecureStore.getItemAsync(TOKEN_KEY).catch(() => null),
+        AsyncStorage.getItem(SERVER_ID_KEY).catch(() => null),
+        AsyncStorage.getItem(QUERY_ONLY_KEY).catch(() => null),
+        AsyncStorage.getItem(USERNAME_KEY).catch(() => null),
+        AsyncStorage.getItem(ROLE_KEY).catch(() => null),
+        AsyncStorage.getItem(MODEL_TIER_KEY).catch(() => null),
       ]);
 
       if (token) {
@@ -403,7 +403,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         });
       }
     } catch (error) {
-      console.error('恢复会话失败:', error);
+      console.warn('恢复会话失败:', error);
     }
   },
 

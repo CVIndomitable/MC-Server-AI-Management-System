@@ -1,5 +1,6 @@
 # 敏感文件 — 服务器信息和API key
 docs/
+test-env.md
 
 # OS
 .DS_Store

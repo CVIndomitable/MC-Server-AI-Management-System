@@ -38,7 +38,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     if (success) {
       onLoginSuccess();
     } else {
-      Alert.alert('登录失败', '用户名或密码错误');
+      Alert.alert('登录失败', useAppStore.getState().error || '用户名或密码错误');
     }
   };
 
