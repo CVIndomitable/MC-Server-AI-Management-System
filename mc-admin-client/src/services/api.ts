@@ -186,11 +186,11 @@ class ApiService {
   async bindServer(serverId: string): Promise<ApiResponse<UserServerInfo>> {
     try {
       const response = await this.client.post(`/api/v1/servers/${serverId}/bind`);
+      if (response.status === 202) {
+        return { success: false, error: response.data?.detail || '已提交绑定申请，等待主管理员审批' };
+      }
       return { success: true, data: response.data };
     } catch (error: any) {
-      if (error.response?.status === 202) {
-        return { success: false, error: error.response.data?.detail || '已提交绑定申请，等待主管理员审批' };
-      }
       return { success: false, error: this.getChineseError(error, '绑定服务器失败') };
     }
   }

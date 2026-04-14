@@ -10,7 +10,6 @@ import {
   Modal,
 } from 'react-native';
 import { useAppStore } from '../services/store';
-import apiService from '../services/api';
 
 interface QuickAction {
   id: string;
@@ -78,7 +77,7 @@ const QUICK_ACTIONS: QuickAction[] = [
 ];
 
 export default function ActionsScreen() {
-  const { serverId } = useAppStore();
+  const { serverId, sendMessage } = useAppStore();
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedAction, setSelectedAction] = useState<QuickAction | null>(null);
   const [inputValue, setInputValue] = useState('');
@@ -106,15 +105,9 @@ export default function ActionsScreen() {
       ? action.buildCommand(input)
       : action.command;
 
-    const result = await apiService.sendChatMessage(command, serverId, false);
+    await sendMessage(command);
 
     setIsExecuting(false);
-
-    if (result.success) {
-      Alert.alert('执行结果', result.data?.message || `${action.title}已发送`);
-    } else {
-      Alert.alert('失败', result.error || '操作失败');
-    }
   };
 
   const handleModalConfirm = () => {

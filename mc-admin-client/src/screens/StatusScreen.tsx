@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl } from 'react-native';
 import { useAppStore } from '../services/store';
-import { LineChart } from 'react-native-chart-kit';
 import apiService from '../services/api';
 
 export default function StatusScreen() {
@@ -31,7 +30,8 @@ export default function StatusScreen() {
     );
   }
 
-  const memoryPercent = ((serverStatus.memory_used_mb / serverStatus.memory_max_mb) * 100).toFixed(1);
+  const memoryRatio = serverStatus.memory_used_mb / serverStatus.memory_max_mb;
+  const memoryPercent = (memoryRatio * 100).toFixed(1);
   const tpsColor = serverStatus.tps >= 19 ? '#4CAF50' : serverStatus.tps >= 15 ? '#FF9800' : '#F44336';
 
   return (
@@ -67,7 +67,8 @@ export default function StatusScreen() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>内存使用</Text>
         <View style={styles.memoryBar}>
-          <View style={[styles.memoryFill, { width: `${memoryPercent}%` as any }]} />
+          <View style={[styles.memoryFill, { flex: memoryRatio }]} />
+          <View style={{ flex: 1 - memoryRatio }} />
         </View>
         <Text style={styles.memoryText}>
           {serverStatus.memory_used_mb} MB / {serverStatus.memory_max_mb} MB ({memoryPercent}%)
@@ -173,6 +174,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   memoryBar: {
+    flexDirection: 'row',
     height: 24,
     backgroundColor: '#1a1a1a',
     borderRadius: 12,

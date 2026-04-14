@@ -77,9 +77,7 @@ function MainTabs() {
 }
 
 export default function App() {
-  const { isAuthenticated, serverSelected, restoreSession, clearServerSelection } = useAppStore();
-  const [showMain, setShowMain] = useState(false);
-  const [showServerSelect, setShowServerSelect] = useState(false);
+  const { isAuthenticated, serverSelected, restoreSession } = useAppStore();
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -94,21 +92,6 @@ export default function App() {
     };
     initApp();
   }, []);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      if (serverSelected) {
-        setShowMain(true);
-        setShowServerSelect(false);
-      } else {
-        setShowServerSelect(true);
-        setShowMain(false);
-      }
-    } else {
-      setShowMain(false);
-      setShowServerSelect(false);
-    }
-  }, [isAuthenticated, serverSelected]);
 
   if (isLoading) {
     return (
@@ -131,14 +114,11 @@ export default function App() {
     );
   }
 
-  if (showServerSelect && !showMain) {
+  if (!serverSelected) {
     return (
       <>
         <StatusBar style="light" />
-        <ServerSelectScreen onServerSelected={() => {
-          setShowMain(true);
-          setShowServerSelect(false);
-        }} />
+        <ServerSelectScreen onServerSelected={() => {}} />
       </>
     );
   }

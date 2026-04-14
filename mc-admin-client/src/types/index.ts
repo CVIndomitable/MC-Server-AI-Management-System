@@ -10,8 +10,9 @@ export interface ServerStatus {
 
 // WebSocket消息类型
 export interface WSMessage {
-  type: 'status' | 'command' | 'result' | 'chat_response';
+  type: 'auth' | 'status' | 'command' | 'result' | 'chat_response';
   server_id?: string;
+  token?: string;
   timestamp?: number;
   data?: any;
   id?: string;

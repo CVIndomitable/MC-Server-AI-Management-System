@@ -42,14 +42,16 @@ export default function ServerSelectScreen({ onServerSelected }: Props) {
   // 加载拥有的服务器的待审批申请
   const loadPendingRequests = async () => {
     const ownerServers = myServers.filter(s => s.role === 'owner');
+    const results = await Promise.all(
+      ownerServers.map(async (server) => {
+        const result = await apiService.getBindRequests(server.server_id);
+        return { serverId: server.server_id, result };
+      })
+    );
     const requests: Record<string, BindRequestInfo[]> = {};
-    for (const server of ownerServers) {
-      const result = await apiService.getBindRequests(server.server_id);
-      if (result.success && result.data) {
-        const pending = result.data.requests;
-        if (pending.length > 0) {
-          requests[server.server_id] = pending;
-        }
+    for (const { serverId, result } of results) {
+      if (result.success && result.data && result.data.requests.length > 0) {
+        requests[serverId] = result.data.requests;
       }
     }
     setPendingRequests(requests);

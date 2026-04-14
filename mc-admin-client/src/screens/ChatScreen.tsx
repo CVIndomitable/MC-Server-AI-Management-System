@@ -28,6 +28,7 @@ export default function ChatScreen() {
     chatMessages, sendMessage, isLoading,
     queryOnlyMode, toggleQueryOnlyMode,
     modelTier, setModelTier,
+    addChatMessage,
   } = useAppStore();
   const flatListRef = useRef<FlatList>(null);
 
@@ -49,23 +50,34 @@ export default function ChatScreen() {
 
   const currentModelLabel = MODEL_OPTIONS.find(m => m.value === modelTier)?.label || '自动';
 
-  const { addChatMessage } = useAppStore();
-
   const renderMessage = ({ item }: { item: ChatMessage }) => {
-    // 高危命令需要确认时，渲染 ReviewCard
+    const isUser = item.role === 'user';
+
+    // 高危命令需要确认时，渲染 ReviewCard + AI消息内容
     if (item.review?.status === 'pending_confirmation' && item.review.pending_id) {
       return (
-        <ReviewCard
-          review={item.review}
-          onResult={(msg) => {
-            addChatMessage({
-              id: Date.now().toString(36) + Math.random().toString(36).substring(2),
-              role: 'assistant',
-              content: msg,
-              timestamp: Date.now(),
-            });
-          }}
-        />
+        <View>
+          <View style={[styles.messageBubble, styles.assistantBubble]}>
+            <Text style={styles.messageText}>{item.content}</Text>
+            <Text style={styles.timestamp}>
+              {new Date(item.timestamp).toLocaleTimeString('zh-CN', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </Text>
+          </View>
+          <ReviewCard
+            review={item.review}
+            onResult={(msg) => {
+              addChatMessage({
+                id: Date.now().toString(36) + Math.random().toString(36).substring(2),
+                role: 'assistant',
+                content: msg,
+                timestamp: Date.now(),
+              });
+            }}
+          />
+        </View>
       );
     }
 
@@ -73,7 +85,7 @@ export default function ChatScreen() {
       <View
         style={[
           styles.messageBubble,
-          item.role === 'user' ? styles.userBubble : styles.assistantBubble,
+          isUser ? styles.userBubble : styles.assistantBubble,
         ]}
       >
         <Text style={styles.messageText}>{item.content}</Text>

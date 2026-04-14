@@ -11,12 +11,16 @@ class WebSocketService {
   private messageHandlers: Set<MessageHandler> = new Set();
   private statusHandlers: Set<ConnectionStatusHandler> = new Set();
   private isIntentionallyClosed = false;
+  private currentToken: string = '';
+  private currentServerId: string = '';
 
   connect(token: string, serverId: string) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
+    if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING) {
       return;
     }
 
+    this.currentToken = token;
+    this.currentServerId = serverId;
     this.isIntentionallyClosed = false;
     const wsUrl = CONFIG.wsUrl;
 
@@ -25,12 +29,11 @@ class WebSocketService {
 
       this.ws.onopen = () => {
         console.log('WebSocket连接成功，发送认证信息');
-        // 连接后发送认证消息
         this.send({
           type: 'auth',
-          token,
-          server_id: serverId,
-        } as any);
+          token: this.currentToken,
+          server_id: this.currentServerId,
+        });
         this.reconnectAttempts = 0;
         this.notifyStatusHandlers(true);
       };
@@ -54,16 +57,16 @@ class WebSocketService {
         this.notifyStatusHandlers(false);
 
         if (!this.isIntentionallyClosed) {
-          this.scheduleReconnect(token, serverId);
+          this.scheduleReconnect();
         }
       };
     } catch (error) {
       console.error('WebSocket连接失败:', error);
-      this.scheduleReconnect(token, serverId);
+      this.scheduleReconnect();
     }
   }
 
-  private scheduleReconnect(token: string, serverId: string) {
+  private scheduleReconnect() {
     if (this.reconnectAttempts >= CONFIG.maxReconnectAttempts) {
       console.error('达到最大重连次数，停止重连');
       return;
@@ -79,7 +82,7 @@ class WebSocketService {
     console.log(`${delay}ms后尝试第${this.reconnectAttempts}次重连...`);
 
     this.reconnectTimer = setTimeout(() => {
-      this.connect(token, serverId);
+      this.connect(this.currentToken, this.currentServerId);
     }, delay);
   }
 
@@ -96,6 +99,8 @@ class WebSocketService {
       this.ws = null;
     }
 
+    this.currentToken = '';
+    this.currentServerId = '';
     this.reconnectAttempts = 0;
     this.notifyStatusHandlers(false);
   }

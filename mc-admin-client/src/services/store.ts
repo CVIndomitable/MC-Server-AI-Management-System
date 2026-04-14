@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2);
@@ -15,11 +16,26 @@ const USERNAME_KEY = '@mc_admin_username';
 const ROLE_KEY = '@mc_admin_role';
 const MODEL_TIER_KEY = '@mc_admin_model_tier';
 
-// 从JWT中解析payload
+// 从JWT中解析payload（兼容无atob的环境）
+function base64Decode(str: string): string {
+  const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64 + '='.repeat((4 - base64.length % 4) % 4);
+  if (typeof atob !== 'undefined') return atob(padded);
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let result = '', bits = 0, buffer = 0;
+  for (const c of padded) {
+    if (c === '=') break;
+    buffer = (buffer << 6) | chars.indexOf(c);
+    bits += 6;
+    if (bits >= 8) { bits -= 8; result += String.fromCharCode((buffer >> bits) & 0xFF); }
+  }
+  return result;
+}
+
 function parseJwtPayload(token: string): { sub?: string; role?: string } | null {
   try {
     const payload = token.split('.')[1];
-    const decoded = atob(payload);
+    const decoded = base64Decode(payload);
     return JSON.parse(decoded);
   } catch {
     return null;
@@ -52,8 +68,9 @@ interface AppState {
   queryOnlyMode: boolean;
   modelTier: ModelTier | undefined;
 
-  // WebSocket消息处理器引用
+  // WebSocket处理器引用
   wsMessageHandler: ((message: any) => void) | null;
+  wsStatusHandler: ((connected: boolean) => void) | null;
 
   // Actions
   login: (username: string, password: string) => Promise<boolean>;
@@ -93,6 +110,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   queryOnlyMode: false,
   modelTier: undefined,
   wsMessageHandler: null,
+  wsStatusHandler: null,
 
   login: async (username: string, password: string) => {
     set({ isLoading: true, error: null });
@@ -108,7 +126,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const parsedUsername = payload?.sub || username;
       const parsedRole = payload?.role || 'user';
 
-      await AsyncStorage.setItem(TOKEN_KEY, token);
+      await SecureStore.setItemAsync(TOKEN_KEY, token);
       await AsyncStorage.setItem(USERNAME_KEY, parsedUsername);
       await AsyncStorage.setItem(ROLE_KEY, parsedRole);
 
@@ -134,7 +152,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     get().disconnectWebSocket();
     apiService.clearToken();
 
-    AsyncStorage.removeItem(TOKEN_KEY);
+    SecureStore.deleteItemAsync(TOKEN_KEY);
     AsyncStorage.removeItem(SERVER_ID_KEY);
     AsyncStorage.removeItem(USERNAME_KEY);
     AsyncStorage.removeItem(ROLE_KEY);
@@ -197,9 +215,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   addChatMessage: (message: ChatMessage) => {
-    set(state => ({
-      chatMessages: [...state.chatMessages, message],
-    }));
+    set(state => {
+      const messages = [...state.chatMessages, message];
+      return { chatMessages: messages.length > 100 ? messages.slice(-100) : messages };
+    });
   },
 
   sendMessage: async (content: string) => {
@@ -240,12 +259,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   connectWebSocket: () => {
-    const { token, serverId, updateServerStatus, addChatMessage, wsMessageHandler } = get();
+    const { token, serverId, updateServerStatus, addChatMessage, wsMessageHandler, wsStatusHandler } = get();
 
     if (!token) return;
 
     if (wsMessageHandler) {
       wsService.removeMessageHandler(wsMessageHandler);
+    }
+    if (wsStatusHandler) {
+      wsService.removeStatusHandler(wsStatusHandler);
     }
 
     wsService.connect(token, serverId);
@@ -264,22 +286,25 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     };
 
-    const statusHandler = (connected: boolean) => {
+    const newStatusHandler = (connected: boolean) => {
       set({ wsConnected: connected });
     };
 
     wsService.addMessageHandler(handler);
-    wsService.addStatusHandler(statusHandler);
-    set({ wsMessageHandler: handler });
+    wsService.addStatusHandler(newStatusHandler);
+    set({ wsMessageHandler: handler, wsStatusHandler: newStatusHandler });
   },
 
   disconnectWebSocket: () => {
-    const { wsMessageHandler } = get();
+    const { wsMessageHandler, wsStatusHandler } = get();
 
     if (wsMessageHandler) {
       wsService.removeMessageHandler(wsMessageHandler);
-      set({ wsMessageHandler: null });
     }
+    if (wsStatusHandler) {
+      wsService.removeStatusHandler(wsStatusHandler);
+    }
+    set({ wsMessageHandler: null, wsStatusHandler: null });
 
     wsService.disconnect();
   },
@@ -291,7 +316,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   restoreSession: async () => {
     try {
       const [token, serverId, queryOnly, username, role, modelTier] = await Promise.all([
-        AsyncStorage.getItem(TOKEN_KEY),
+        SecureStore.getItemAsync(TOKEN_KEY),
         AsyncStorage.getItem(SERVER_ID_KEY),
         AsyncStorage.getItem(QUERY_ONLY_KEY),
         AsyncStorage.getItem(USERNAME_KEY),
