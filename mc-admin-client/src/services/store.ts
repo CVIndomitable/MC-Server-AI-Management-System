@@ -5,7 +5,7 @@ import * as SecureStore from 'expo-secure-store';
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
-import { ServerStatus, ChatMessage, UserServerInfo, ServerInfo, ModelTier } from '../types';
+import { ServerStatus, ChatMessage, UserServerInfo, ServerInfo, ModelTier, SavedAccount } from '../types';
 import apiService from '../services/api';
 import wsService from '../services/websocket';
 
@@ -15,6 +15,8 @@ const QUERY_ONLY_KEY = '@mc_admin_query_only';
 const USERNAME_KEY = '@mc_admin_username';
 const ROLE_KEY = '@mc_admin_role';
 const MODEL_TIER_KEY = '@mc_admin_model_tier';
+const SAVED_ACCOUNTS_KEY = '@mc_admin_saved_accounts';
+const SAVED_PWD_PREFIX = '@mc_admin_pwd_';
 
 // 从JWT中解析payload（兼容无atob的环境）
 function base64Decode(str: string): string {
@@ -68,13 +70,19 @@ interface AppState {
   queryOnlyMode: boolean;
   modelTier: ModelTier | undefined;
 
+  // 多账号
+  savedAccounts: SavedAccount[];
+
   // WebSocket处理器引用
   wsMessageHandler: ((message: any) => void) | null;
   wsStatusHandler: ((connected: boolean) => void) | null;
 
   // Actions
   login: (username: string, password: string) => Promise<boolean>;
+  quickLogin: (username: string) => Promise<boolean>;
   logout: () => void;
+  loadSavedAccounts: () => Promise<void>;
+  removeSavedAccount: (username: string) => Promise<void>;
   setServerId: (id: string) => void;
   selectServer: (id: string) => void;
   fetchMyServers: () => Promise<void>;
@@ -109,6 +117,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   wsConnected: false,
   queryOnlyMode: false,
   modelTier: undefined,
+  savedAccounts: [],
   wsMessageHandler: null,
   wsStatusHandler: null,
 
@@ -130,6 +139,21 @@ export const useAppStore = create<AppState>((set, get) => ({
       await AsyncStorage.setItem(USERNAME_KEY, parsedUsername);
       await AsyncStorage.setItem(ROLE_KEY, parsedRole);
 
+      // 保存账号到已保存列表
+      try {
+        const raw = await AsyncStorage.getItem(SAVED_ACCOUNTS_KEY);
+        const accounts: SavedAccount[] = raw ? JSON.parse(raw) : [];
+        const existing = accounts.findIndex(a => a.username === parsedUsername);
+        if (existing >= 0) {
+          accounts[existing].lastUsed = Date.now();
+        } else {
+          accounts.push({ username: parsedUsername, lastUsed: Date.now() });
+        }
+        await AsyncStorage.setItem(SAVED_ACCOUNTS_KEY, JSON.stringify(accounts));
+        await SecureStore.setItemAsync(SAVED_PWD_PREFIX + parsedUsername, password);
+        set({ savedAccounts: accounts.sort((a, b) => b.lastUsed - a.lastUsed) });
+      } catch {}
+
       set({
         isAuthenticated: true,
         token,
@@ -146,6 +170,37 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
       return false;
     }
+  },
+
+  quickLogin: async (username: string) => {
+    try {
+      const password = await SecureStore.getItemAsync(SAVED_PWD_PREFIX + username);
+      if (!password) return false;
+      return await get().login(username, password);
+    } catch {
+      return false;
+    }
+  },
+
+  loadSavedAccounts: async () => {
+    try {
+      const raw = await AsyncStorage.getItem(SAVED_ACCOUNTS_KEY);
+      if (raw) {
+        const accounts: SavedAccount[] = JSON.parse(raw);
+        set({ savedAccounts: accounts.sort((a, b) => b.lastUsed - a.lastUsed) });
+      }
+    } catch {}
+  },
+
+  removeSavedAccount: async (username: string) => {
+    try {
+      const raw = await AsyncStorage.getItem(SAVED_ACCOUNTS_KEY);
+      const accounts: SavedAccount[] = raw ? JSON.parse(raw) : [];
+      const filtered = accounts.filter(a => a.username !== username);
+      await AsyncStorage.setItem(SAVED_ACCOUNTS_KEY, JSON.stringify(filtered));
+      await SecureStore.deleteItemAsync(SAVED_PWD_PREFIX + username);
+      set({ savedAccounts: filtered.sort((a, b) => b.lastUsed - a.lastUsed) });
+    } catch {}
   },
 
   logout: () => {

@@ -114,6 +114,12 @@ export interface BindRequestInfo {
   resolved_by?: string;
 }
 
+// 已保存的账号
+export interface SavedAccount {
+  username: string;
+  lastUsed: number; // timestamp
+}
+
 // 记忆系统
 export interface MemoryResponse {
   content: string;

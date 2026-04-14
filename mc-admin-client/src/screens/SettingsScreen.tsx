@@ -244,6 +244,16 @@ export default function SettingsScreen() {
           <Text style={styles.arrow}>&gt;</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={styles.actionRow}
+          onPress={() => {
+            logout();
+          }}
+        >
+          <Text style={styles.actionText}>切换账号</Text>
+          <Text style={styles.arrow}>&gt;</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity style={[styles.actionRow, styles.dangerRow]} onPress={logout}>
           <Text style={styles.dangerText}>退出登录</Text>
         </TouchableOpacity>
