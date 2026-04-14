@@ -114,11 +114,14 @@ class UserDatabase:
             await db.commit()
         return True
 
-    async def list_users(self) -> list[dict]:
-        """列出所有用户（不含密码）"""
+    async def list_users(self, skip: int = 0, limit: int = 50) -> list[dict]:
+        """列出用户（不含密码），支持分页"""
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
-            async with db.execute("SELECT id, username, role, created_at FROM users ORDER BY id") as cursor:
+            async with db.execute(
+                "SELECT id, username, role, created_at FROM users ORDER BY id LIMIT ? OFFSET ?",
+                (limit, skip)
+            ) as cursor:
                 rows = await cursor.fetchall()
                 return [dict(row) for row in rows]
 

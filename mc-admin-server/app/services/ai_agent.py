@@ -126,6 +126,8 @@ class AIAgent:
     def __init__(self):
         self.conversation_history: Dict[tuple, List[Dict]] = {}
         self.max_history_length = 50
+        self.max_conversations = 200
+        self._access_order: Dict[tuple, float] = {}  # LRU跟踪
 
     def _resolve_model(self, message: str, query_only: bool, model_tier: Optional[str]) -> str:
         """根据消息内容和参数选择合适的模型"""
@@ -155,10 +157,21 @@ class AIAgent:
         # 5. 默认 flash
         return settings.model_flash
 
+    def _touch_conversation(self, hkey: tuple):
+        """更新会话访问时间，必要时淘汰最久未使用的会话"""
+        import time as _time
+        self._access_order[hkey] = _time.time()
+        if len(self.conversation_history) > self.max_conversations:
+            oldest = min(self._access_order, key=self._access_order.get)
+            self.conversation_history.pop(oldest, None)
+            self._access_order.pop(oldest, None)
+            logger.info(f"会话淘汰(LRU): {oldest}")
+
     async def process_message(self, user_message: str, server_id: str, current_status: dict = None, query_only: bool = False, model_tier: Optional[str] = None, admin_id: str = "admin") -> Dict[str, Any]:
         hkey = (admin_id, server_id)
         if hkey not in self.conversation_history:
             self.conversation_history[hkey] = []
+        self._touch_conversation(hkey)
 
         user_msg = {"role": "user", "content": user_message}
         if current_status:
@@ -170,7 +183,7 @@ class AIAgent:
         # ---- 命令缓存：相同消息直接复用上次的工具调用 ----
         if not query_only:
             try:
-                cached = await command_cache.get(user_message, server_id)
+                cached = await command_cache.get(user_message, server_id, user_id=admin_id)
             except Exception as e:
                 logger.warning(f"缓存查询失败，跳过: {e}")
                 cached = None
@@ -244,7 +257,7 @@ class AIAgent:
         # 缓存包含工具调用的结果到 Redis
         if not query_only:
             try:
-                await command_cache.put(user_message, server_id, result)
+                await command_cache.put(user_message, server_id, result, user_id=admin_id)
             except Exception as e:
                 logger.warning(f"缓存写入失败: {e}")
 

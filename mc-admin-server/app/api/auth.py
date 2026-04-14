@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, Query
 from app.models.schemas import (
     LoginRequest, Token, RegisterRequest, ChangePasswordRequest,
     ResetPasswordRequest, UserInfo, UserListResponse
@@ -7,6 +7,9 @@ from app.core.auth import create_access_token, verify_token
 from app.core.database import user_db
 from collections import defaultdict
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -29,9 +32,12 @@ def _check_login_rate(request: Request):
 async def login(request: LoginRequest, http_request: Request):
     """用户登录"""
     _check_login_rate(http_request)
+    client_ip = http_request.client.host if http_request.client else "unknown"
     user = await user_db.authenticate(request.username, request.password)
     if not user:
+        logger.warning(f"登录失败: user={request.username}, ip={client_ip}")
         raise HTTPException(status_code=401, detail="用户名或密码错误")
+    logger.info(f"登录成功: user={request.username}, ip={client_ip}")
     access_token = create_access_token({"sub": user["username"], "role": user["role"]})
     return Token(access_token=access_token)
 
@@ -65,21 +71,27 @@ async def change_password(request: ChangePasswordRequest, current_user: dict = D
 async def reset_password(username: str, request: ResetPasswordRequest, current_user: dict = Depends(verify_token)):
     """管理员重置指定用户的密码（无需旧密码）"""
     if current_user.get("role") != "admin":
+        logger.warning(f"越权操作: user={current_user.get('sub')} 尝试重置 {username} 的密码")
         raise HTTPException(status_code=403, detail="仅管理员可重置密码")
     if len(request.new_password) < 6:
         raise HTTPException(status_code=400, detail="新密码长度不能少于6位")
     success = await user_db.reset_password(username, request.new_password)
     if not success:
         raise HTTPException(status_code=404, detail="用户不存在")
+    logger.info(f"管理员 {current_user.get('sub')} 重置了用户 {username} 的密码")
     return {"message": f"用户 {username} 的密码已重置"}
 
 
 @router.get("/users", response_model=UserListResponse)
-async def list_users(current_user: dict = Depends(verify_token)):
-    """获取用户列表（仅管理员）"""
+async def list_users(
+    current_user: dict = Depends(verify_token),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """获取用户列表（仅管理员，支持分页）"""
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="仅管理员可查看用户列表")
-    users = await user_db.list_users()
+    users = await user_db.list_users(skip=skip, limit=limit)
     return UserListResponse(users=[
         UserInfo(username=u["username"], role=u["role"], created_at=u["created_at"])
         for u in users
@@ -96,4 +108,5 @@ async def delete_user(username: str, current_user: dict = Depends(verify_token))
     success = await user_db.delete_user(username)
     if not success:
         raise HTTPException(status_code=404, detail="用户不存在")
+    logger.info(f"管理员 {current_user.get('sub')} 删除了用户 {username}")
     return {"message": f"用户 {username} 已删除"}

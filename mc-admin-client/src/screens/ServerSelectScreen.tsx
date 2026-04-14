@@ -39,19 +39,22 @@ export default function ServerSelectScreen({ onServerSelected }: Props) {
     setLoading(false);
   };
 
-  // 加载拥有的服务器的待审批申请
+  // 加载拥有的服务器的待审批申请（allSettled防止单个失败影响全部）
   const loadPendingRequests = async () => {
     const ownerServers = myServers.filter(s => s.role === 'owner');
-    const results = await Promise.all(
+    const results = await Promise.allSettled(
       ownerServers.map(async (server) => {
         const result = await apiService.getBindRequests(server.server_id);
         return { serverId: server.server_id, result };
       })
     );
     const requests: Record<string, BindRequestInfo[]> = {};
-    for (const { serverId, result } of results) {
-      if (result.success && result.data && result.data.requests.length > 0) {
-        requests[serverId] = result.data.requests;
+    for (const settled of results) {
+      if (settled.status === 'fulfilled') {
+        const { serverId, result } = settled.value;
+        if (result.success && result.data && result.data.requests.length > 0) {
+          requests[serverId] = result.data.requests;
+        }
       }
     }
     setPendingRequests(requests);

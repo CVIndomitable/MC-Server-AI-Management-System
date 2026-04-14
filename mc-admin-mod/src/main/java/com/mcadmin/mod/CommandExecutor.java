@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -24,8 +25,8 @@ public class CommandExecutor {
 
     public CommandExecutor(MinecraftServer server) {
         this.server = server;
-        this.allowedCommands = new HashSet<>(Config.getAllowedCommands());
-        this.dangerousCommands = new HashSet<>(Config.getDangerousCommands());
+        this.allowedCommands = Collections.unmodifiableSet(new HashSet<>(Config.getAllowedCommands()));
+        this.dangerousCommands = Collections.unmodifiableSet(new HashSet<>(Config.getDangerousCommands()));
         LOGGER.info("Command whitelist loaded: {}", allowedCommands);
         LOGGER.info("Dangerous commands: {}", dangerousCommands);
     }
@@ -35,7 +36,7 @@ public class CommandExecutor {
      * 原子替换引用，避免 clear()+addAll() 窗口期的竞态
      */
     public void updateAllowedCommands(Set<String> commands) {
-        this.allowedCommands = new HashSet<>(commands);
+        this.allowedCommands = Collections.unmodifiableSet(new HashSet<>(commands));
         LOGGER.info("Command whitelist updated: {}", allowedCommands);
     }
 
@@ -45,10 +46,7 @@ public class CommandExecutor {
     public boolean isDangerousAction(String action, JsonObject payload) {
         if ("restart".equals(action)) return true;
         if ("execute".equals(action) && payload != null && payload.has("command")) {
-            String cmd = payload.get("command").getAsString();
-            if (cmd.startsWith("/")) cmd = cmd.substring(1);
-            String baseCmd = cmd.split(" ")[0];
-            return dangerousCommands.contains(baseCmd);
+            return containsDangerousCommand(payload.get("command").getAsString());
         }
         return false;
     }
@@ -97,6 +95,52 @@ public class CommandExecutor {
         });
     }
 
+    /**
+     * 递归检查命令是否在白名单中，包括 /execute ... run 嵌套的子命令
+     */
+    private boolean isCommandAllowed(String command, Set<String> currentAllowed) {
+        String cmd = command.startsWith("/") ? command.substring(1) : command;
+        String baseCommand = cmd.split(" ")[0];
+
+        if (!currentAllowed.contains(baseCommand)) {
+            return false;
+        }
+
+        // 检测 execute ... run 嵌套命令
+        if ("execute".equals(baseCommand)) {
+            String lowerCmd = cmd.toLowerCase();
+            int runIdx = lowerCmd.indexOf(" run ");
+            if (runIdx >= 0) {
+                String subCommand = cmd.substring(runIdx + 5).trim();
+                return isCommandAllowed(subCommand, currentAllowed);
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 递归检查命令是否包含危险子命令
+     */
+    private boolean containsDangerousCommand(String command) {
+        String cmd = command.startsWith("/") ? command.substring(1) : command;
+        String baseCommand = cmd.split(" ")[0];
+        Set<String> currentDangerous = dangerousCommands;
+
+        if (currentDangerous.contains(baseCommand)) {
+            return true;
+        }
+        // 检测 execute ... run 嵌套
+        if ("execute".equals(baseCommand)) {
+            String lowerCmd = cmd.toLowerCase();
+            int runIdx = lowerCmd.indexOf(" run ");
+            if (runIdx >= 0) {
+                String subCommand = cmd.substring(runIdx + 5).trim();
+                return containsDangerousCommand(subCommand);
+            }
+        }
+        return false;
+    }
+
     private void executeMinecraftCommand(JsonObject payload, BiConsumer<Boolean, String> callback) {
         if (!payload.has("command") || payload.get("command").isJsonNull()) {
             callback.accept(false, "Missing 'command' in payload");
@@ -110,10 +154,10 @@ public class CommandExecutor {
             command = command.substring(1);
         }
 
-        // 检查命令白名单（读取 volatile 引用的快照）
+        // 检查命令白名单，包括嵌套子命令（读取 volatile 引用的快照）
         Set<String> currentAllowed = allowedCommands;
-        String baseCommand = command.split(" ")[0];
-        if (!currentAllowed.contains(baseCommand)) {
+        if (!isCommandAllowed(command, currentAllowed)) {
+            String baseCommand = command.split(" ")[0];
             callback.accept(false, "Command not allowed: " + baseCommand
                 + " (whitelist: " + currentAllowed + ")");
             return;
@@ -181,10 +225,27 @@ public class CommandExecutor {
         String restartScript = Config.getRestartScript();
 
         if (!restartScript.isEmpty()) {
-            // 有配置重启脚本：先执行脚本，再停止服务器
             File scriptFile = new File(restartScript);
-            if (!scriptFile.exists()) {
+
+            // 路径安全校验：必须存在、是文件、可执行、在服务器目录下
+            try {
+                String canonicalPath = scriptFile.getCanonicalPath();
+                String serverDir = new File(".").getCanonicalPath();
+                if (!canonicalPath.startsWith(serverDir + File.separator)) {
+                    callback.accept(false, "Restart script must be within server directory");
+                    return;
+                }
+            } catch (IOException e) {
+                callback.accept(false, "Invalid restart script path");
+                return;
+            }
+
+            if (!scriptFile.exists() || !scriptFile.isFile()) {
                 callback.accept(false, "Restart script not found: " + restartScript);
+                return;
+            }
+            if (!scriptFile.canExecute()) {
+                callback.accept(false, "Restart script is not executable: " + restartScript);
                 return;
             }
 
@@ -192,7 +253,8 @@ public class CommandExecutor {
             callback.accept(true, "Server restarting via script");
 
             try {
-                new ProcessBuilder("/bin/sh", "-c", restartScript)
+                // 直接执行脚本文件，不通过shell解释器，防止命令注入
+                new ProcessBuilder(scriptFile.getCanonicalPath())
                     .inheritIO()
                     .start();
             } catch (IOException e) {

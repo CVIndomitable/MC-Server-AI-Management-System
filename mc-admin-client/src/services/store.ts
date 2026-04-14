@@ -16,7 +16,7 @@ const USERNAME_KEY = '@mc_admin_username';
 const ROLE_KEY = '@mc_admin_role';
 const MODEL_TIER_KEY = '@mc_admin_model_tier';
 const SAVED_ACCOUNTS_KEY = '@mc_admin_saved_accounts';
-const SAVED_PWD_PREFIX = '@mc_admin_pwd_';
+const SAVED_TOKEN_PREFIX = '@mc_admin_token_';
 
 // 从JWT中解析payload（兼容无atob的环境）
 function base64Decode(str: string): string {
@@ -34,7 +34,7 @@ function base64Decode(str: string): string {
   return result;
 }
 
-function parseJwtPayload(token: string): { sub?: string; role?: string } | null {
+function parseJwtPayload(token: string): { sub?: string; role?: string; exp?: number } | null {
   try {
     const payload = token.split('.')[1];
     const decoded = base64Decode(payload);
@@ -42,6 +42,13 @@ function parseJwtPayload(token: string): { sub?: string; role?: string } | null 
   } catch {
     return null;
   }
+}
+
+function isTokenExpired(token: string): boolean {
+  const payload = parseJwtPayload(token);
+  if (!payload?.exp) return true;
+  // 提前60秒判定过期，留出余量
+  return Date.now() / 1000 >= payload.exp - 60;
 }
 
 interface AppState {
@@ -139,7 +146,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await AsyncStorage.setItem(USERNAME_KEY, parsedUsername);
       await AsyncStorage.setItem(ROLE_KEY, parsedRole);
 
-      // 保存账号到已保存列表
+      // 保存账号到已保存列表（存储token而非密码）
       try {
         const raw = await AsyncStorage.getItem(SAVED_ACCOUNTS_KEY);
         const accounts: SavedAccount[] = raw ? JSON.parse(raw) : [];
@@ -150,7 +157,11 @@ export const useAppStore = create<AppState>((set, get) => ({
           accounts.push({ username: parsedUsername, lastUsed: Date.now() });
         }
         await AsyncStorage.setItem(SAVED_ACCOUNTS_KEY, JSON.stringify(accounts));
-        await SecureStore.setItemAsync(SAVED_PWD_PREFIX + parsedUsername, password);
+        await SecureStore.setItemAsync(SAVED_TOKEN_PREFIX + parsedUsername, token);
+      } catch {}
+      try {
+        const raw = await AsyncStorage.getItem(SAVED_ACCOUNTS_KEY);
+        const accounts: SavedAccount[] = raw ? JSON.parse(raw) : [];
         set({ savedAccounts: accounts.sort((a, b) => b.lastUsed - a.lastUsed) });
       } catch {}
 
@@ -174,9 +185,46 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   quickLogin: async (username: string) => {
     try {
-      const password = await SecureStore.getItemAsync(SAVED_PWD_PREFIX + username);
-      if (!password) return false;
-      return await get().login(username, password);
+      const savedToken = await SecureStore.getItemAsync(SAVED_TOKEN_PREFIX + username);
+      if (!savedToken) return false;
+
+      // 检查token是否过期
+      if (isTokenExpired(savedToken)) {
+        // token已过期，清理保存的数据
+        await SecureStore.deleteItemAsync(SAVED_TOKEN_PREFIX + username);
+        return false;
+      }
+
+      // token未过期，直接使用
+      apiService.setToken(savedToken);
+      const payload = parseJwtPayload(savedToken);
+      const parsedUsername = payload?.sub || username;
+      const parsedRole = payload?.role || 'user';
+
+      await SecureStore.setItemAsync(TOKEN_KEY, savedToken);
+      await AsyncStorage.setItem(USERNAME_KEY, parsedUsername);
+      await AsyncStorage.setItem(ROLE_KEY, parsedRole);
+
+      // 更新最后使用时间
+      try {
+        const raw = await AsyncStorage.getItem(SAVED_ACCOUNTS_KEY);
+        const accounts: SavedAccount[] = raw ? JSON.parse(raw) : [];
+        const existing = accounts.findIndex(a => a.username === parsedUsername);
+        if (existing >= 0) {
+          accounts[existing].lastUsed = Date.now();
+          await AsyncStorage.setItem(SAVED_ACCOUNTS_KEY, JSON.stringify(accounts));
+          set({ savedAccounts: accounts.sort((a, b) => b.lastUsed - a.lastUsed) });
+        }
+      } catch {}
+
+      set({
+        isAuthenticated: true,
+        token: savedToken,
+        username: parsedUsername,
+        userRole: parsedRole,
+        isLoading: false,
+      });
+      return true;
     } catch {
       return false;
     }
@@ -198,7 +246,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const accounts: SavedAccount[] = raw ? JSON.parse(raw) : [];
       const filtered = accounts.filter(a => a.username !== username);
       await AsyncStorage.setItem(SAVED_ACCOUNTS_KEY, JSON.stringify(filtered));
-      await SecureStore.deleteItemAsync(SAVED_PWD_PREFIX + username);
+      await SecureStore.deleteItemAsync(SAVED_TOKEN_PREFIX + username);
       set({ savedAccounts: filtered.sort((a, b) => b.lastUsed - a.lastUsed) });
     } catch {}
   },
@@ -328,6 +376,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     wsService.connect(token, serverId);
 
     const handler = (message: any) => {
+      // 过滤非当前服务器的消息，防止切换服务器时旧消息窜入
+      const currentServerId = get().serverId;
+      if (message.server_id && message.server_id !== currentServerId) return;
+
       if (message.type === 'status' && message.data) {
         updateServerStatus(message.data);
       } else if (message.type === 'chat_response' && message.message) {

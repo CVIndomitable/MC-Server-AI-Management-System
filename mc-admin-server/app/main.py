@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from app.api import auth, chat, memory, servers
 from app.websocket import routes as ws_routes
 from app.core.database import user_db
@@ -55,6 +56,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="MC Admin Server", version="1.0.0", lifespan=lifespan)
 
+# 请求体大小限制（1MB）
+MAX_BODY_SIZE = 1 * 1024 * 1024
+
+@app.middleware("http")
+async def limit_body_size(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > MAX_BODY_SIZE:
+        return JSONResponse({"detail": "请求体过大"}, status_code=413)
+    return await call_next(request)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -75,4 +86,19 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    checks = {"api": "ok"}
+    try:
+        if memory_service._redis:
+            await memory_service._redis.ping()
+            checks["redis"] = "ok"
+        else:
+            checks["redis"] = "not_initialized"
+    except Exception:
+        checks["redis"] = "error"
+    try:
+        await user_db.get_user("__health_check__")
+        checks["database"] = "ok"
+    except Exception:
+        checks["database"] = "error"
+    status = "ok" if all(v == "ok" for v in checks.values()) else "degraded"
+    return {"status": status, "checks": checks}

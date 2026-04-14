@@ -10,11 +10,22 @@ from app.websocket.manager import manager
 from config.settings import settings
 from datetime import datetime
 from typing import Literal
+import re
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["chat"])
+
+# MC玩家名仅允许字母、数字、下划线，长度1-16
+_VALID_MC_NAME = re.compile(r'^[a-zA-Z0-9_]{1,16}$')
+
+
+def _validate_player_name(name: str) -> str:
+    """验证MC玩家名，防止命令注入"""
+    if not _VALID_MC_NAME.match(name):
+        raise ValueError(f"无效的玩家名: {name}")
+    return name
 
 
 def _tool_to_mc_command(tool_name: str, tool_input: dict) -> str | None:
@@ -22,16 +33,21 @@ def _tool_to_mc_command(tool_name: str, tool_input: dict) -> str | None:
     if tool_name == "execute_command":
         return tool_input.get("command", "")
     if tool_name == "kick_player":
-        cmd = f"/kick {tool_input['player']}"
+        player = _validate_player_name(tool_input['player'])
+        cmd = f"/kick {player}"
         if "reason" in tool_input:
-            cmd += f" {tool_input['reason']}"
+            # 原因字段去除换行和控制字符
+            reason = re.sub(r'[\r\n\x00-\x1f]', '', tool_input['reason'])[:100]
+            cmd += f" {reason}"
         return cmd
     if tool_name == "op_player":
-        return f"/op {tool_input['player']}"
+        return f"/op {_validate_player_name(tool_input['player'])}"
     if tool_name == "deop_player":
-        return f"/deop {tool_input['player']}"
+        return f"/deop {_validate_player_name(tool_input['player'])}"
     if tool_name == "broadcast":
-        return f"/say {tool_input['message']}"
+        # 广播消息去除控制字符，限制长度
+        message = re.sub(r'[\r\n\x00-\x1f]', '', tool_input['message'])[:256]
+        return f"/say {message}"
     return None
 
 
@@ -249,11 +265,14 @@ async def confirm_pending_command(
     """用户确认或拒绝高危命令"""
     admin_id = user.get("sub", "admin")
 
-    pending = await command_reviewer.get_pending_command(pending_id)
+    # 原子获取并删除，防止并发重复执行
+    pending = await command_reviewer.get_and_delete_pending_command(pending_id)
     if not pending:
         raise HTTPException(404, "确认请求已过期或不存在")
 
     if pending["user_id"] != admin_id:
+        # 非本人操作，回写数据让真正的用户可以操作
+        await command_reviewer.store_pending_command_raw(pending_id, pending)
         raise HTTPException(403, "无权操作")
 
     server_id = pending["server_id"]
@@ -273,7 +292,6 @@ async def confirm_pending_command(
         except Exception as e:
             result = {"success": False, "output": f"执行失败: {str(e)}"}
 
-        await command_reviewer.delete_pending_command(pending_id)
         return {
             "success": True,
             "message": f"已执行: {command}",
@@ -285,7 +303,6 @@ async def confirm_pending_command(
         ai_agent.add_tool_result(
             admin_id, server_id, tool_call["id"], "用户取消了此操作"
         )
-        await command_reviewer.delete_pending_command(pending_id)
         return {
             "success": True,
             "message": "已取消执行",

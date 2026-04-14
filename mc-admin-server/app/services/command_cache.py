@@ -45,14 +45,14 @@ class CommandCacheService:
             await self._redis.close()
 
     @staticmethod
-    def _hash(message: str, server_id: str) -> str:
-        """规范化消息文本并生成哈希作为缓存 key（含 server_id 隔离）"""
-        normalized = f"{server_id}:{message.strip().lower()}"
+    def _hash(message: str, server_id: str, user_id: str = "") -> str:
+        """规范化消息文本并生成哈希作为缓存 key（含 server_id + user_id 隔离）"""
+        normalized = f"{server_id}:{user_id}:{message.strip().lower()}"
         return hashlib.sha256(normalized.encode()).hexdigest()
 
-    async def get(self, message: str, server_id: str) -> Optional[Dict[str, Any]]:
+    async def get(self, message: str, server_id: str, user_id: str = "") -> Optional[Dict[str, Any]]:
         """查询缓存，命中则增加调用计数并返回结果"""
-        h = self._hash(message, server_id)
+        h = self._hash(message, server_id, user_id)
         raw = await self._redis.get(_data_key(h))
         if raw is None:
             await self._redis.zrem(INDEX_KEY, h)
@@ -67,11 +67,11 @@ class CommandCacheService:
         await self._redis.zincrby(INDEX_KEY, 1, h)
         return entry["result"]
 
-    async def put(self, message: str, server_id: str, result: Dict[str, Any]):
+    async def put(self, message: str, server_id: str, result: Dict[str, Any], user_id: str = ""):
         """缓存包含工具调用的 AI 响应"""
         if not result.get("tool_calls"):
             return
-        h = self._hash(message, server_id)
+        h = self._hash(message, server_id, user_id)
         # 超出上限时淘汰调用最少的条目
         size = await self._redis.zcard(INDEX_KEY)
         if size >= self.max_size:

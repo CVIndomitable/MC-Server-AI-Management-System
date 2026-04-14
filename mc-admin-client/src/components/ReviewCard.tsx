@@ -13,6 +13,7 @@ export default function ReviewCard({ review, onResult }: ReviewCardProps) {
   const [loading, setLoading] = useState(false);
   const [remaining, setRemaining] = useState(review.expires_in || 120);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const actionInProgress = useRef(false);
 
   useEffect(() => {
     if (status !== 'pending') return;
@@ -29,12 +30,18 @@ export default function ReviewCard({ review, onResult }: ReviewCardProps) {
     }, 1000);
 
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     };
   }, [status]);
 
   const handleAction = async (action: 'approve' | 'reject') => {
     if (!review.pending_id || status !== 'pending') return;
+    // 用ref防止双击，比state更快生效
+    if (actionInProgress.current) return;
+    actionInProgress.current = true;
     setLoading(true);
 
     const result = await apiService.confirmPendingCommand(review.pending_id, action);
@@ -47,6 +54,7 @@ export default function ReviewCard({ review, onResult }: ReviewCardProps) {
       if (result.error === '确认请求已过期') {
         setStatus('expired');
       }
+      actionInProgress.current = false;
     }
     setLoading(false);
   };

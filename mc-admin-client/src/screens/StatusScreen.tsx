@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, Platform, RefreshControl, FlatList } from 'react-native';
 import { useAppStore } from '../services/store';
 import apiService from '../services/api';
 
@@ -79,14 +79,18 @@ export default function StatusScreen() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>在线玩家 ({serverStatus.players.length})</Text>
         {serverStatus.players.length > 0 ? (
-          <View style={styles.playerList}>
-            {serverStatus.players.map((player, index) => (
-              <View key={index} style={styles.playerItem}>
+          <FlatList
+            data={serverStatus.players}
+            keyExtractor={(item, index) => `${item}-${index}`}
+            scrollEnabled={false}
+            renderItem={({ item: player }) => (
+              <View style={styles.playerItem}>
                 <View style={styles.playerDot} />
                 <Text style={styles.playerName}>{player}</Text>
               </View>
-            ))}
-          </View>
+            )}
+            style={styles.playerList}
+          />
         ) : (
           <Text style={styles.noPlayersText}>当前无玩家在线</Text>
         )}

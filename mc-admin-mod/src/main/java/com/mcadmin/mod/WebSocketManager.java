@@ -11,9 +11,7 @@ import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.concurrent.CompletionStage;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class WebSocketManager {
@@ -21,16 +19,28 @@ public class WebSocketManager {
     private static final long INITIAL_RECONNECT_DELAY = 5000;
     private static final long MAX_RECONNECT_DELAY = 60000;
     private static final long HEARTBEAT_INTERVAL = 30000;
+    private static final int MAX_MESSAGE_SIZE = 1024 * 1024; // 1MB消息大小限制
 
     private volatile WebSocket webSocket;
     private final CommandExecutor commandExecutor;
     private final StatusReporter statusReporter;
-    private Timer reconnectTimer;
-    private Timer heartbeatTimer;
     private final AtomicBoolean shouldReconnect = new AtomicBoolean(true);
     private final AtomicBoolean connected = new AtomicBoolean(false);
     private final HttpClient httpClient;
-    private long currentReconnectDelay = INITIAL_RECONNECT_DELAY;
+    private volatile long currentReconnectDelay = INITIAL_RECONNECT_DELAY;
+
+    // 用 ScheduledExecutorService 代替 Timer，避免资源泄漏
+    private final ScheduledExecutorService scheduler =
+        Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "MCAdmin-Scheduler");
+            t.setDaemon(true);
+            return t;
+        });
+    private volatile ScheduledFuture<?> reconnectFuture;
+    private volatile ScheduledFuture<?> heartbeatFuture;
+
+    // 待确认命令追踪，防止伪造 confirmed=true 绕过确认
+    private final Set<String> pendingConfirmations = ConcurrentHashMap.newKeySet();
 
     public WebSocketManager(CommandExecutor commandExecutor, StatusReporter statusReporter) {
         this.commandExecutor = commandExecutor;
@@ -44,13 +54,13 @@ public class WebSocketManager {
             String authToken = Config.getAuthToken();
             String serverId = Config.getServerId();
 
-            String separator = wsUrl.contains("?") ? "&" : "?";
-            String fullUrl = wsUrl + separator + "server_id=" + serverId + "&token=" + authToken;
-
+            // Token通过Header传输（不暴露在URL中）
             LOGGER.info("Connecting to WebSocket: {}", wsUrl);
 
             httpClient.newWebSocketBuilder()
-                .buildAsync(URI.create(fullUrl), new WebSocket.Listener() {
+                .header("Authorization", "Bearer " + authToken)
+                .header("X-Server-Id", serverId)
+                .buildAsync(URI.create(wsUrl), new WebSocket.Listener() {
                     private final StringBuilder messageBuffer = new StringBuilder();
 
                     @Override
@@ -65,6 +75,13 @@ public class WebSocketManager {
 
                     @Override
                     public CompletionStage<?> onText(WebSocket ws, CharSequence data, boolean last) {
+                        // 消息大小限制，防止OOM
+                        if (messageBuffer.length() + data.length() > MAX_MESSAGE_SIZE) {
+                            LOGGER.warn("Message exceeds max size ({}), discarding", MAX_MESSAGE_SIZE);
+                            messageBuffer.setLength(0);
+                            ws.request(1);
+                            return null;
+                        }
                         messageBuffer.append(data);
                         if (last) {
                             String message = messageBuffer.toString();
@@ -108,6 +125,10 @@ public class WebSocketManager {
     private void handleMessage(String message) {
         try {
             JsonObject json = JsonParser.parseString(message).getAsJsonObject();
+            if (!json.has("type") || json.get("type").isJsonNull()) {
+                LOGGER.warn("Invalid message: missing 'type' field");
+                return;
+            }
             String type = json.get("type").getAsString();
 
             switch (type) {
@@ -118,7 +139,7 @@ public class WebSocketManager {
                     handleWhitelistUpdate(json);
                     break;
                 case "auth_response":
-                    LOGGER.debug("Received auth_response (auth handled via query params)");
+                    LOGGER.debug("Received auth_response");
                     break;
                 case "pong":
                     break;
@@ -131,12 +152,21 @@ public class WebSocketManager {
     }
 
     private void handleCommand(JsonObject json) {
+        // 安全的JSON字段访问，防止NullPointerException
+        if (!json.has("id") || json.get("id").isJsonNull()
+                || !json.has("action") || json.get("action").isJsonNull()) {
+            LOGGER.warn("Invalid command message: missing 'id' or 'action'");
+            return;
+        }
+
         String commandId = json.get("id").getAsString();
         String action = json.get("action").getAsString();
-        JsonObject payload = json.has("payload") ? json.getAsJsonObject("payload") : new JsonObject();
+        JsonObject payload = json.has("payload") && !json.get("payload").isJsonNull()
+            ? json.getAsJsonObject("payload") : new JsonObject();
 
         // 提取扩展字段
-        String adminId = payload.has("admin_id") ? payload.get("admin_id").getAsString() : null;
+        String adminId = payload.has("admin_id") && !payload.get("admin_id").isJsonNull()
+            ? payload.get("admin_id").getAsString() : null;
         boolean confirmed = payload.has("confirmed") && payload.get("confirmed").getAsBoolean();
 
         LOGGER.info("Received command: {} ({}) from admin: {}", action, commandId,
@@ -147,8 +177,18 @@ public class WebSocketManager {
                 && commandExecutor.isDangerousAction(action, payload)) {
             String detail = commandExecutor.describeCommand(action, payload);
             LOGGER.warn("Dangerous command requires confirmation: {} ({})", detail, commandId);
+            pendingConfirmations.add(commandId);
             sendConfirmRequired(commandId, action, detail, adminId);
             return;
+        }
+
+        // 如果标记了 confirmed，必须是之前请求过确认的命令
+        if (confirmed && Config.requireConfirmation()) {
+            if (!pendingConfirmations.remove(commandId)) {
+                LOGGER.warn("Received confirmed command {} that was not pending confirmation, rejecting", commandId);
+                sendCommandResult(commandId, false, "Command was not pending confirmation", adminId);
+                return;
+            }
         }
 
         commandExecutor.executeCommand(commandId, action, payload, (success, output) -> {
@@ -161,7 +201,7 @@ public class WebSocketManager {
      * 消息格式: {"type": "update_whitelist", "commands": ["list", "say", ...]}
      */
     private void handleWhitelistUpdate(JsonObject json) {
-        if (!json.has("commands")) {
+        if (!json.has("commands") || json.get("commands").isJsonNull()) {
             LOGGER.warn("Invalid update_whitelist message: missing 'commands' field");
             return;
         }
@@ -222,63 +262,59 @@ public class WebSocketManager {
         }
     }
 
-    private synchronized void scheduleReconnect() {
+    private void scheduleReconnect() {
         if (!shouldReconnect.get()) return;
 
-        if (reconnectTimer != null) {
-            reconnectTimer.cancel();
+        // 取消现有重连任务
+        ScheduledFuture<?> existing = reconnectFuture;
+        if (existing != null) {
+            existing.cancel(false);
         }
 
-        reconnectTimer = new Timer("MCAdmin-Reconnect", true);
-        LOGGER.info("Scheduling reconnect in {} ms", currentReconnectDelay);
         long delay = currentReconnectDelay;
-        reconnectTimer.schedule(new TimerTask() {
-            @Override
-            public void run() {
-                if (shouldReconnect.get()) {
-                    LOGGER.info("Attempting to reconnect...");
-                    connect();
-                }
+        LOGGER.info("Scheduling reconnect in {} ms", delay);
+        reconnectFuture = scheduler.schedule(() -> {
+            if (shouldReconnect.get()) {
+                LOGGER.info("Attempting to reconnect...");
+                connect();
             }
-        }, delay);
+        }, delay, TimeUnit.MILLISECONDS);
 
         // 指数退避：5s → 10s → 20s → 40s → 60s（上限）
         currentReconnectDelay = Math.min(currentReconnectDelay * 2, MAX_RECONNECT_DELAY);
     }
 
-    private synchronized void startHeartbeat() {
+    private void startHeartbeat() {
         stopHeartbeat();
-        heartbeatTimer = new Timer("MCAdmin-Heartbeat", true);
-        heartbeatTimer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                if (connected.get()) {
-                    JsonObject ping = new JsonObject();
-                    ping.addProperty("type", "ping");
-                    ping.addProperty("timestamp", System.currentTimeMillis());
-                    sendMessage(ping.toString());
-                }
+        heartbeatFuture = scheduler.scheduleAtFixedRate(() -> {
+            if (connected.get()) {
+                JsonObject ping = new JsonObject();
+                ping.addProperty("type", "ping");
+                ping.addProperty("timestamp", System.currentTimeMillis());
+                sendMessage(ping.toString());
             }
-        }, HEARTBEAT_INTERVAL, HEARTBEAT_INTERVAL);
+        }, HEARTBEAT_INTERVAL, HEARTBEAT_INTERVAL, TimeUnit.MILLISECONDS);
         LOGGER.debug("Heartbeat started");
     }
 
-    private synchronized void stopHeartbeat() {
-        if (heartbeatTimer != null) {
-            heartbeatTimer.cancel();
-            heartbeatTimer = null;
+    private void stopHeartbeat() {
+        ScheduledFuture<?> hb = heartbeatFuture;
+        if (hb != null) {
+            hb.cancel(false);
+            heartbeatFuture = null;
         }
     }
 
     public void disconnect() {
         shouldReconnect.set(false);
         stopHeartbeat();
-        synchronized (this) {
-            if (reconnectTimer != null) {
-                reconnectTimer.cancel();
-                reconnectTimer = null;
-            }
+
+        ScheduledFuture<?> rc = reconnectFuture;
+        if (rc != null) {
+            rc.cancel(false);
+            reconnectFuture = null;
         }
+
         WebSocket ws = webSocket;
         if (ws != null) {
             try {
@@ -289,6 +325,7 @@ public class WebSocketManager {
         }
         connected.set(false);
         webSocket = null;
+        scheduler.shutdown();
         LOGGER.info("WebSocket disconnected");
     }
 }
