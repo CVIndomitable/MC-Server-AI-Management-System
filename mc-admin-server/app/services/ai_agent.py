@@ -209,7 +209,7 @@ class AIAgent:
         logger.info(f"[{server_id}] 模型路由: {model} (tier={model_tier}, query_only={query_only}, msg_len={len(user_message)})")
 
         base_prompt = QUERY_ONLY_PROMPT_BASE if query_only else SYSTEM_PROMPT_BASE
-        system_prompt = await self._build_system_prompt(base_prompt, admin_id, server_id)
+        system_prompt = await self._build_system_prompt(base_prompt, admin_id, server_id, user_message=user_message)
 
         create_params = {
             "model": model,
@@ -274,10 +274,10 @@ class AIAgent:
                 "content": result
             })
 
-    async def _build_system_prompt(self, base_prompt: str, admin_id: str, server_id: str) -> str:
-        """拼接基础 prompt + 三级记忆"""
+    async def _build_system_prompt(self, base_prompt: str, admin_id: str, server_id: str, user_message: str = "") -> str:
+        """拼接基础 prompt + 三级记忆（根据用户问题智能过滤）"""
         try:
-            memory_prompt = await memory_service.build_memory_prompt(admin_id, server_id)
+            memory_prompt = await memory_service.build_memory_prompt(admin_id, server_id, user_message=user_message)
             if memory_prompt.replace("（暂无）", "").strip():
                 return base_prompt + "\n\n以下是你的记忆，请基于这些记忆协助管理员：" + memory_prompt
         except Exception as e:

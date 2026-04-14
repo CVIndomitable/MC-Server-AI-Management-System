@@ -133,11 +133,19 @@ class ServerUserListResponse(BaseModel):
 
 
 # 记忆系统模型
+class MemoryEntry(BaseModel):
+    id: Optional[str] = None  # 自动生成
+    tags: List[str] = []
+    content: str
+    pinned: bool = False
+
 class MemoryUpdateRequest(BaseModel):
-    content: str  # Markdown格式的记忆文本
+    content: str  # Markdown格式的记忆文本（向后兼容）
+    entries: Optional[List[MemoryEntry]] = None  # 结构化条目（可选）
 
 class MemoryResponse(BaseModel):
     content: str
+    entries: Optional[List[MemoryEntry]] = None  # 结构化条目（如有）
     updated_at: Optional[datetime] = None
 
 class MemoryBackupItem(BaseModel):
