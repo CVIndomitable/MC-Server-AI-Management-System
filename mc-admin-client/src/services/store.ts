@@ -17,6 +17,7 @@ const ROLE_KEY = '@mc_admin_role';
 const MODEL_TIER_KEY = '@mc_admin_model_tier';
 const SAVED_ACCOUNTS_KEY = '@mc_admin_saved_accounts';
 const SAVED_TOKEN_PREFIX = '@mc_admin_token_';
+const SHOW_ACTIONS_TAB_KEY = '@mc_admin_show_actions_tab';
 
 // 从JWT中解析payload（兼容无atob的环境）
 function base64Decode(str: string): string {
@@ -76,6 +77,7 @@ interface AppState {
   wsConnected: boolean;
   queryOnlyMode: boolean;
   modelTier: ModelTier | undefined;
+  showActionsTab: boolean;
 
   // 多账号
   savedAccounts: SavedAccount[];
@@ -104,6 +106,7 @@ interface AppState {
   restoreSession: () => Promise<void>;
   toggleQueryOnlyMode: () => void;
   setModelTier: (tier: ModelTier | undefined) => void;
+  toggleActionsTab: () => void;
   clearServerSelection: () => void;
   getCurrentServerRole: () => string | null;
 }
@@ -124,6 +127,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   wsConnected: false,
   queryOnlyMode: false,
   modelTier: undefined,
+  showActionsTab: false,
   savedAccounts: [],
   wsMessageHandler: null,
   wsStatusHandler: null,
@@ -422,13 +426,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   restoreSession: async () => {
     try {
-      const [token, serverId, queryOnly, username, role, modelTier] = await Promise.all([
+      const [token, serverId, queryOnly, username, role, modelTier, showActions] = await Promise.all([
         SecureStore.getItemAsync(TOKEN_KEY).catch(() => null),
         AsyncStorage.getItem(SERVER_ID_KEY).catch(() => null),
         AsyncStorage.getItem(QUERY_ONLY_KEY).catch(() => null),
         AsyncStorage.getItem(USERNAME_KEY).catch(() => null),
         AsyncStorage.getItem(ROLE_KEY).catch(() => null),
         AsyncStorage.getItem(MODEL_TIER_KEY).catch(() => null),
+        AsyncStorage.getItem(SHOW_ACTIONS_TAB_KEY).catch(() => null),
       ]);
 
       if (token) {
@@ -452,6 +457,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           serverSelected: !!serverId,
           queryOnlyMode: queryOnly === 'true',
           modelTier: (modelTier as ModelTier) || undefined,
+          showActionsTab: showActions === 'true',
         });
       }
     } catch (error) {
@@ -472,6 +478,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     } else {
       AsyncStorage.removeItem(MODEL_TIER_KEY);
     }
+  },
+
+  toggleActionsTab: () => {
+    const newValue = !get().showActionsTab;
+    set({ showActionsTab: newValue });
+    AsyncStorage.setItem(SHOW_ACTIONS_TAB_KEY, String(newValue));
   },
 
   getCurrentServerRole: () => {

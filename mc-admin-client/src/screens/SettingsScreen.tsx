@@ -9,13 +9,14 @@ import {
   Alert,
   Modal,
   RefreshControl,
+  Switch,
 } from 'react-native';
 import { useAppStore } from '../services/store';
 import apiService from '../services/api';
 import { UserInfo, ServerUserInfo } from '../types';
 
 export default function SettingsScreen() {
-  const { username, userRole, serverId, myServers, logout, fetchMyServers } = useAppStore();
+  const { username, userRole, serverId, myServers, logout, fetchMyServers, showActionsTab, toggleActionsTab } = useAppStore();
   const currentServer = myServers.find(s => s.server_id === serverId);
   const isOwner = currentServer?.role === 'owner';
   const isSystemAdmin = userRole === 'admin';
@@ -257,6 +258,20 @@ export default function SettingsScreen() {
         <TouchableOpacity style={[styles.actionRow, styles.dangerRow]} onPress={logout}>
           <Text style={styles.dangerText}>退出登录</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* 功能开关 */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>功能开关</Text>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>快捷操作面板</Text>
+          <Switch
+            value={showActionsTab}
+            onValueChange={toggleActionsTab}
+            trackColor={{ false: '#555', true: '#007AFF' }}
+            thumbColor="#fff"
+          />
+        </View>
       </View>
 
       {/* 服务器管理（选中服务器时显示） */}

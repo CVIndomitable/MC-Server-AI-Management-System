@@ -15,7 +15,7 @@ import { useAppStore } from './src/services/store';
 const Tab = createBottomTabNavigator();
 
 function MainTabs() {
-  const { clearServerSelection, serverId } = useAppStore();
+  const { clearServerSelection, serverId, showActionsTab } = useAppStore();
 
   return (
     <Tab.Navigator
@@ -56,14 +56,16 @@ function MainTabs() {
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>📊</Text>,
         }}
       />
-      <Tab.Screen
-        name="Actions"
-        component={ActionsScreen}
-        options={{
-          title: '操作',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>⚡</Text>,
-        }}
-      />
+      {showActionsTab && (
+        <Tab.Screen
+          name="Actions"
+          component={ActionsScreen}
+          options={{
+            title: '操作',
+            tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>⚡</Text>,
+          }}
+        />
+      )}
       <Tab.Screen
         name="Settings"
         component={SettingsScreen}
