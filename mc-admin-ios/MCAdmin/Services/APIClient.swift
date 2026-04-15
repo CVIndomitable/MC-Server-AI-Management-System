@@ -11,7 +11,7 @@ actor APIClient {
 
     private init() {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 10
+        config.timeoutIntervalForRequest = 30
         self.session = URLSession(configuration: config)
     }
 

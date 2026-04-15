@@ -25,12 +25,23 @@ struct ChatView: View {
                                     }
                                     .id(msg.id)
                                 }
+
+                                // AI思考中指示器
+                                if appState.isLoading {
+                                    ThinkingBubble()
+                                        .id("thinking")
+                                }
                             }
                             .padding()
                         }
                         .onChange(of: appState.chatMessages.count) {
                             if let last = appState.chatMessages.last {
                                 withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                            }
+                        }
+                        .onChange(of: appState.isLoading) {
+                            if appState.isLoading {
+                                withAnimation { proxy.scrollTo("thinking", anchor: .bottom) }
                             }
                         }
                     }
@@ -115,21 +126,33 @@ struct ChatView: View {
                 .foregroundStyle(Theme.textPrimary)
                 .focused($isInputFocused)
 
-            Button {
-                let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !text.isEmpty else { return }
-                inputText = ""
-                isInputFocused = false
-                Task { await appState.sendMessage(text) }
-            } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(
-                        inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            ? Theme.textDisabled : Theme.primary
-                    )
+            if appState.isLoading {
+                // 停止按钮（AI思考中）
+                Button {
+                    appState.cancelChat()
+                } label: {
+                    Image(systemName: "stop.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(Theme.red)
+                }
+            } else {
+                // 发送按钮
+                Button {
+                    let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !text.isEmpty else { return }
+                    inputText = ""
+                    isInputFocused = false
+                    appState.startChat(text)
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(
+                            inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                ? Theme.textDisabled : Theme.primary
+                        )
+                }
+                .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-            .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || appState.isLoading)
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
@@ -284,5 +307,38 @@ struct ReviewCard: View {
                 timer.invalidate()
             }
         }
+    }
+}
+
+// MARK: - AI思考中指示器
+
+struct ThinkingBubble: View {
+    @State private var animating = false
+
+    var body: some View {
+        HStack {
+            HStack(spacing: 5) {
+                ForEach(0..<3, id: \.self) { i in
+                    Circle()
+                        .fill(Theme.textMuted)
+                        .frame(width: 7, height: 7)
+                        .scaleEffect(animating ? 1.0 : 0.5)
+                        .opacity(animating ? 1.0 : 0.3)
+                        .animation(
+                            .easeInOut(duration: 0.6)
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(i) * 0.2),
+                            value: animating
+                        )
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Theme.cardBackground)
+            .cornerRadius(16)
+
+            Spacer(minLength: 60)
+        }
+        .onAppear { animating = true }
     }
 }

@@ -30,6 +30,9 @@ final class AppState {
     var queryOnlyMode = false
     var modelTier: ModelTier?
 
+    // 当前聊天任务（用于取消）
+    var currentChatTask: Task<Void, Never>?
+
     // 多账号
     var savedAccounts: [SavedAccount] = []
 
@@ -263,6 +266,19 @@ final class AppState {
 
     // MARK: - 聊天
 
+    func startChat(_ content: String) {
+        currentChatTask?.cancel()
+        currentChatTask = Task {
+            await sendMessage(content)
+        }
+    }
+
+    func cancelChat() {
+        currentChatTask?.cancel()
+        currentChatTask = nil
+        isLoading = false
+    }
+
     func sendMessage(_ content: String) async {
         guard !content.isEmpty, !serverId.isEmpty else { return }
 
@@ -284,14 +300,27 @@ final class AppState {
                 modelTier: modelTier?.rawValue
             )
 
-            let assistantMsg = ChatMessage.assistant(response.message, review: response.review)
-            chatMessages.append(assistantMsg)
+            guard !Task.isCancelled else { return }
+
+            // 过滤空响应
+            let text = response.message.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty {
+                let assistantMsg = ChatMessage.assistant(response.message, review: response.review)
+                chatMessages.append(assistantMsg)
+            }
+        } catch is CancellationError {
+            // 用户取消，不显示错误
+        } catch let error as URLError where error.code == .cancelled {
+            // URL请求被取消
         } catch {
-            let errorMsg = ChatMessage.assistant("请求失败: \(error.localizedDescription)")
-            chatMessages.append(errorMsg)
+            if !Task.isCancelled {
+                let errorMsg = ChatMessage.assistant("请求失败: \(error.localizedDescription)")
+                chatMessages.append(errorMsg)
+            }
         }
 
         isLoading = false
+        currentChatTask = nil
     }
 
     func confirmCommand(pendingId: String, action: String) async {
