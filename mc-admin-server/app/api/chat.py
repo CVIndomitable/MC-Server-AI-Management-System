@@ -223,13 +223,31 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
 
         elif review_result.decision == ReviewDecision.PENDING:
             # 高危 → 暂存到Redis，等待客户端确认
-            pending_id = await command_reviewer.store_pending_command(
-                user_id=admin_id,
-                server_id=request.server_id,
-                command=command,
-                tool_call=tool_call,
-                review_result=review_result,
-            )
+            try:
+                pending_id = await command_reviewer.store_pending_command(
+                    user_id=admin_id,
+                    server_id=request.server_id,
+                    command=command,
+                    tool_call=tool_call,
+                    review_result=review_result,
+                )
+            except Exception as e:
+                logger.error(f"暂存待确认命令失败: {e}")
+                ai_agent.add_tool_result(
+                    admin_id, request.server_id, tool_call["id"],
+                    f"审核服务异常，操作未执行: {review_result.reason}"
+                )
+                return ChatResponse(
+                    message=f"高风险操作需要确认，但审核服务暂不可用，请稍后重试。\n原因：{review_result.reason}",
+                    command_executed=None,
+                    review=ReviewInfo(
+                        status="rejected",
+                        risk_level=review_result.risk_level.value,
+                        reviewed_by=review_result.reviewed_by,
+                        reason="审核服务不可用，操作已拦截",
+                    ),
+                    timestamp=datetime.now(),
+                )
             pending_review = ReviewInfo(
                 status="pending_confirmation",
                 risk_level=review_result.risk_level.value,

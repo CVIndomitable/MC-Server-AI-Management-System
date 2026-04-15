@@ -26,6 +26,7 @@ COMMAND_RISK_MAP: dict[str, RiskLevel] = {
     # 高危
     "ban":    RiskLevel.HIGH,
     "pardon": RiskLevel.HIGH,
+    "stop":   RiskLevel.HIGH,
 }
 
 # 特殊工具（非原始命令）的风险等级
