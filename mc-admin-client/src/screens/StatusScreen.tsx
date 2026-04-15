@@ -75,6 +75,48 @@ export default function StatusScreen() {
         </Text>
       </View>
 
+      {/* CPU使用率 */}
+      {(serverStatus.cpu_system != null || serverStatus.cpu_process != null) && (
+        <View style={styles.card}>
+          <View style={styles.cpuHeader}>
+            <Text style={styles.cardTitle}>CPU使用率</Text>
+            {serverStatus.cpu_cores != null && (
+              <Text style={styles.cpuCores}>{serverStatus.cpu_cores} 核心</Text>
+            )}
+          </View>
+          {serverStatus.cpu_system != null && (
+            <View style={styles.cpuRow}>
+              <Text style={styles.cpuLabel}>系统</Text>
+              <View style={styles.cpuBarBg}>
+                <View style={[styles.cpuBarFill, {
+                  flex: serverStatus.cpu_system / 100,
+                  backgroundColor: serverStatus.cpu_system > 80 ? '#F44336' : serverStatus.cpu_system > 50 ? '#FF9800' : '#007AFF',
+                }]} />
+                <View style={{ flex: 1 - serverStatus.cpu_system / 100 }} />
+              </View>
+              <Text style={[styles.cpuValue, {
+                color: serverStatus.cpu_system > 80 ? '#F44336' : serverStatus.cpu_system > 50 ? '#FF9800' : '#007AFF',
+              }]}>{serverStatus.cpu_system.toFixed(1)}%</Text>
+            </View>
+          )}
+          {serverStatus.cpu_process != null && (
+            <View style={styles.cpuRow}>
+              <Text style={styles.cpuLabel}>MC进程</Text>
+              <View style={styles.cpuBarBg}>
+                <View style={[styles.cpuBarFill, {
+                  flex: serverStatus.cpu_process / 100,
+                  backgroundColor: serverStatus.cpu_process > 80 ? '#F44336' : serverStatus.cpu_process > 50 ? '#FF9800' : '#007AFF',
+                }]} />
+                <View style={{ flex: 1 - serverStatus.cpu_process / 100 }} />
+              </View>
+              <Text style={[styles.cpuValue, {
+                color: serverStatus.cpu_process > 80 ? '#F44336' : serverStatus.cpu_process > 50 ? '#FF9800' : '#007AFF',
+              }]}>{serverStatus.cpu_process.toFixed(1)}%</Text>
+            </View>
+          )}
+        </View>
+      )}
+
       {/* 在线玩家 */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>在线玩家 ({serverStatus.players.length})</Text>
@@ -192,6 +234,44 @@ const styles = StyleSheet.create({
   memoryText: {
     color: '#aaa',
     fontSize: 14,
+  },
+  cpuHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  cpuCores: {
+    color: '#888',
+    fontSize: 13,
+  },
+  cpuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  cpuLabel: {
+    color: '#aaa',
+    fontSize: 14,
+    width: 56,
+  },
+  cpuBarBg: {
+    flex: 1,
+    flexDirection: 'row',
+    height: 16,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginHorizontal: 8,
+  },
+  cpuBarFill: {
+    height: '100%',
+  },
+  cpuValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    width: 50,
+    textAlign: 'right',
   },
   playerList: {
     marginTop: 8,

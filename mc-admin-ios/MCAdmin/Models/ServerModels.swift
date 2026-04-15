@@ -76,6 +76,9 @@ struct ServerStatus: Codable {
     let players: [String]
     let memory_used_mb: Int
     let memory_max_mb: Int
+    let cpu_process: Double?  // JVM进程CPU使用率(%)
+    let cpu_system: Double?   // 系统总CPU使用率(%)
+    let cpu_cores: Int?       // CPU核心数
     let recent_errors: [String]
     let timestamp: TimeInterval?
     let online: Bool?

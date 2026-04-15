@@ -9,6 +9,7 @@ import net.minecraft.world.level.storage.ServerLevelData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
@@ -81,6 +82,9 @@ public class StatusReporter {
 
         // 内存占用
         collectMemory(data);
+
+        // CPU使用率
+        collectCpu(data);
 
         // 世界信息
         collectWorldInfo(data);
@@ -191,6 +195,26 @@ public class StatusReporter {
         long maxMemory = runtime.maxMemory() / 1024 / 1024;
         data.addProperty("memory_used_mb", usedMemory);
         data.addProperty("memory_max_mb", maxMemory);
+    }
+
+    private void collectCpu(JsonObject data) {
+        try {
+            var osBean = ManagementFactory.getOperatingSystemMXBean();
+            if (osBean instanceof com.sun.management.OperatingSystemMXBean sunBean) {
+                double processCpu = sunBean.getProcessCpuLoad();
+                double systemCpu = sunBean.getCpuLoad();
+                // 返回值为 0.0~1.0，转为百分比，保留一位小数；负值表示不可用
+                if (processCpu >= 0) {
+                    data.addProperty("cpu_process", Math.round(processCpu * 1000.0) / 10.0);
+                }
+                if (systemCpu >= 0) {
+                    data.addProperty("cpu_system", Math.round(systemCpu * 1000.0) / 10.0);
+                }
+            }
+            data.addProperty("cpu_cores", osBean.getAvailableProcessors());
+        } catch (Exception e) {
+            LOGGER.debug("Failed to collect CPU info: {}", e.getMessage());
+        }
     }
 
     private void collectWorldInfo(JsonObject data) {

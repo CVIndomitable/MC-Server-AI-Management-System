@@ -20,6 +20,11 @@ struct StatusView: View {
                             // 内存
                             memoryCard(status)
 
+                            // CPU
+                            if status.cpu_system != nil || status.cpu_process != nil {
+                                cpuCard(status)
+                            }
+
                             // 在线玩家
                             playersCard(status)
 
@@ -192,6 +197,62 @@ struct StatusView: View {
         .padding()
         .background(Theme.cardBackground)
         .cornerRadius(12)
+    }
+
+    // MARK: - CPU卡片
+
+    private func cpuCard(_ status: ServerStatus) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("CPU")
+                    .font(.headline)
+                    .foregroundStyle(Theme.textSecondary)
+                Spacer()
+                if let cores = status.cpu_cores {
+                    Text("\(cores) 核心")
+                        .font(.caption)
+                        .foregroundStyle(Theme.textMuted)
+                }
+            }
+
+            if let systemCpu = status.cpu_system {
+                cpuRow(label: "系统", value: systemCpu)
+            }
+
+            if let processCpu = status.cpu_process {
+                cpuRow(label: "MC进程", value: processCpu)
+            }
+        }
+        .padding()
+        .background(Theme.cardBackground)
+        .cornerRadius(12)
+    }
+
+    private func cpuRow(label: String, value: Double) -> some View {
+        VStack(spacing: 6) {
+            HStack {
+                Text(label)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.textMuted)
+                Spacer()
+                Text(String(format: "%.1f%%", value))
+                    .font(.subheadline.bold())
+                    .foregroundStyle(value > 80 ? Theme.red : value > 50 ? Theme.orange : Theme.primary)
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Theme.border)
+                        .frame(height: 8)
+
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(value > 80 ? Theme.red : value > 50 ? Theme.orange : Theme.primary)
+                        .frame(width: geo.size.width * min(value / 100.0, 1.0), height: 8)
+                }
+            }
+            .frame(height: 8)
+        }
     }
 
     // MARK: - 在线玩家卡片

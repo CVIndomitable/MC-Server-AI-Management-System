@@ -54,6 +54,9 @@ class ServerStatus(BaseModel):
     players: List[str]
     memory_used_mb: int
     memory_max_mb: int
+    cpu_process: Optional[float] = None  # JVM进程CPU使用率(%)
+    cpu_system: Optional[float] = None   # 系统总CPU使用率(%)
+    cpu_cores: Optional[int] = None      # CPU核心数
     recent_errors: List[str]
     last_update: datetime
     online: bool

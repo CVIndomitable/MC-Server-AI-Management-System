@@ -155,9 +155,9 @@ public class CommandExecutor {
         }
 
         // 检查命令白名单，包括嵌套子命令（读取 volatile 引用的快照）
+        String baseCommand = command.split(" ")[0];
         Set<String> currentAllowed = allowedCommands;
         if (!isCommandAllowed(command, currentAllowed)) {
-            String baseCommand = command.split(" ")[0];
             callback.accept(false, "Command not allowed: " + baseCommand
                 + " (whitelist: " + currentAllowed + ")");
             return;

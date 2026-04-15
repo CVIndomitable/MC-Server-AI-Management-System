@@ -4,6 +4,9 @@ export interface ServerStatus {
   players: string[];
   memory_used_mb: number;
   memory_max_mb: number;
+  cpu_process?: number;  // JVM进程CPU使用率(%)
+  cpu_system?: number;   // 系统总CPU使用率(%)
+  cpu_cores?: number;    // CPU核心数
   recent_errors: string[];
   timestamp: number;
 }
