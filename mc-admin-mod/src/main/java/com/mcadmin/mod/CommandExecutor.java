@@ -1,7 +1,9 @@
 package com.mcadmin.mod;
 
 import com.google.gson.JsonObject;
+import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
@@ -9,8 +11,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
@@ -141,6 +145,48 @@ public class CommandExecutor {
         return false;
     }
 
+    /**
+     * 自定义 CommandSource，拦截命令产生的所有文本输出（如 Spark 报告、列表信息等）
+     */
+    private static class OutputCapture implements CommandSource {
+        private static final int MAX_OUTPUT_LENGTH = 8192;
+        private final List<String> messages = new ArrayList<>();
+        private int totalLength = 0;
+
+        @Override
+        public void sendSystemMessage(Component message) {
+            if (totalLength < MAX_OUTPUT_LENGTH) {
+                String text = message.getString();
+                messages.add(text);
+                totalLength += text.length();
+            }
+        }
+
+        @Override
+        public boolean acceptsSuccess() {
+            return true;
+        }
+
+        @Override
+        public boolean acceptsFailure() {
+            return true;
+        }
+
+        @Override
+        public boolean shouldInformAdmins() {
+            return false;
+        }
+
+        public String getCapturedOutput() {
+            if (messages.isEmpty()) return "";
+            String joined = String.join("\n", messages);
+            if (joined.length() > MAX_OUTPUT_LENGTH) {
+                return joined.substring(0, MAX_OUTPUT_LENGTH) + "\n... (output truncated)";
+            }
+            return joined;
+        }
+    }
+
     private void executeMinecraftCommand(JsonObject payload, BiConsumer<Boolean, String> callback) {
         if (!payload.has("command") || payload.get("command").isJsonNull()) {
             callback.accept(false, "Missing 'command' in payload");
@@ -166,18 +212,24 @@ public class CommandExecutor {
         LOGGER.info("Executing command: /{}", command);
 
         try {
-            // 通过 withCallback 捕获命令执行结果
+            // 使用 OutputCapture 拦截命令的文本输出
+            OutputCapture capture = new OutputCapture();
             AtomicBoolean success = new AtomicBoolean(true);
             CommandSourceStack source = server.createCommandSourceStack()
+                .withSource(capture)
                 .withCallback((ok, resultValue) -> {
                     if (!ok) success.set(false);
                 });
             server.getCommands().performPrefixedCommand(source, command);
-            if (success.get()) {
-                callback.accept(true, "Command executed successfully: /" + baseCommand);
-            } else {
-                callback.accept(false, "Command failed: /" + baseCommand);
+
+            String output = capture.getCapturedOutput();
+            if (output.isEmpty()) {
+                // 没有捕获到文本输出时，回退到简单的成功/失败消息
+                output = success.get()
+                    ? "Command executed successfully: /" + baseCommand
+                    : "Command failed: /" + baseCommand;
             }
+            callback.accept(success.get(), output);
         } catch (Exception e) {
             LOGGER.error("Command execution error", e);
             callback.accept(false, "Error: " + e.getMessage());

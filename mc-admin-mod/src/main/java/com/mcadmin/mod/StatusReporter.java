@@ -89,6 +89,9 @@ public class StatusReporter {
         // 世界信息
         collectWorldInfo(data);
 
+        // Spark 详细性能数据（TPS多窗口、MSPT百分位、CPU、GC）
+        collectSparkData(data);
+
         // 服务器运行时长（秒）
         data.addProperty("uptime_seconds", (System.currentTimeMillis() - startTime) / 1000);
 
@@ -244,6 +247,17 @@ public class StatusReporter {
             data.add("world", world);
         } catch (Exception e) {
             LOGGER.debug("Failed to collect world info: {}", e.getMessage());
+        }
+    }
+
+    private void collectSparkData(JsonObject data) {
+        try {
+            JsonObject sparkData = SparkIntegration.collectSparkData();
+            if (sparkData != null) {
+                data.add("spark", sparkData);
+            }
+        } catch (Exception e) {
+            LOGGER.debug("Spark data collection skipped: {}", e.getMessage());
         }
     }
 

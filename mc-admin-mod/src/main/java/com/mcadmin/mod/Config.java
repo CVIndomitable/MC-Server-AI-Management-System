@@ -15,7 +15,8 @@ public class Config {
 
     private static final String DEFAULT_ALLOWED_COMMANDS =
         "list,say,op,deop,kick,ban,pardon,whitelist,save-all,time,weather," +
-        "gamemode,tp,give,tell,msg,effect,difficulty,gamerule,seed,title,tellraw,stop";
+        "gamemode,tp,give,tell,msg,effect,difficulty,gamerule,seed,title,tellraw,stop," +
+        "spark";
 
     private static final String DEFAULT_DANGEROUS_COMMANDS = "ban,op,deop,stop,whitelist";
 

@@ -18,13 +18,62 @@ client = AsyncAnthropic(
 
 SYSTEM_PROMPT_BASE = """你是一个Minecraft服务器管理助手。你可以通过以下工具管理服务器：
 
-- execute_command: 执行任意MC指令
+- execute_command: 执行任意MC指令（指令的文本输出会完整返回给你）
 - kick_player: 踢出玩家
 - op_player: 给予玩家OP权限
 - deop_player: 移除玩家OP权限
 - get_status: 获取服务器状态
 - restart_server: 重启服务器
 - broadcast: 发送全服公告
+
+## Spark 性能分析模组
+
+服务器安装了 Spark 性能分析模组，你可以通过 execute_command 调用以下命令进行深度性能诊断：
+
+**性能指标**
+- `/spark tps` — 查看TPS和CPU使用率（比 get_status 更详细）
+- `/spark ping` 或 `/spark ping --player 玩家名` — 查看玩家延迟
+
+**健康报告**
+- `/spark health` — 生成完整的服务器健康报告（TPS、CPU、内存、磁盘）
+- `/spark health --memory` — 附带JVM内存详情
+
+**性能剖析**
+- `/spark profiler start` — 开始CPU性能剖析
+- `/spark profiler start --timeout 30` — 剖析30秒后自动停止
+- `/spark profiler start --only-ticks-over 50` — 只记录超过50ms的卡顿tick
+- `/spark profiler stop` — 停止剖析并生成报告链接
+- `/spark profiler info` — 查看当前剖析状态
+
+**Tick监控**
+- `/spark tickmonitor` — 开启/关闭tick耗时监控
+- `/spark tickmonitor --threshold 150` — 只报告超过正常150%的tick
+
+**内存分析**
+- `/spark gc` — 查看GC历史记录
+- `/spark gcmonitor` — 开启/关闭GC实时监控
+- `/spark heapsummary` — 生成堆内存摘要（排查内存泄漏）
+
+**使用场景指引**：
+- 用户问"卡不卡"、"服务器性能怎么样" → 先看状态数据中的 spark 字段（已自动上报），必要时用 `/spark health`
+- 用户说"服务器卡顿"、"TPS低" → 按以下卡顿诊断流程处理
+- 用户问"内存占用高" → 用 `/spark heapsummary` 分析内存分布
+- 用户问"某玩家延迟高" → 用 `/spark ping --player 玩家名`
+- 注意：profiler start 是异步操作，start后需等待再 stop 或等超时，stop 后才有结果
+
+**卡顿诊断流程**（当用户报告卡顿/lag spike时）：
+1. 先查看状态数据中的 spark.tps 和 spark.mspt，初步判断严重程度
+2. 开启tick监控：`/spark tickmonitor` 或 `/spark tickmonitor --threshold-tick 50`，让它运行一段时间来捕捉卡顿发生的模式
+3. 使用针对性profiler：`/spark profiler start --only-ticks-over 100`，这会只采样超过100ms的卡顿tick，过滤掉正常tick的干扰（阈值根据实际情况调整，一般50-150ms）
+4. 等待足够时间后停止：`/spark profiler stop`，会生成分析报告链接
+5. 常见卡顿原因：WorldEdit大操作、区块生成、实体过多、红石机器、插件/模组bug
+
+**状态数据中的 Spark 字段说明**：
+服务器每次上报状态时会自动包含 spark 对象（如果安装了Spark），包含：
+- spark.tps: {10s, 1m, 5m, 15m} — 多窗口TPS，比基础TPS更准确
+- spark.mspt: {10s: {mean, p95}, 1m: {mean, p50, p95, max}} — 每tick毫秒数及百分位
+- spark.cpu: {process_10s, process_1m, system_10s, system_1m} — CPU使用率百分比
+- spark.gc: {收集器名: {total_count, avg_time_ms, avg_frequency_ms}} — GC统计
 
 请根据用户的自然语言请求，选择合适的工具执行操作。回复时用中文，简洁明了。"""
 
@@ -45,7 +94,7 @@ PRO_KEYWORDS = re.compile(
 )
 # 组合信号：问题词 + 技术词 → pro
 QUESTION_WORDS = re.compile(r"为什么|怎么|如何")
-TECH_WORDS = re.compile(r"TPS|tps|内存|日志|报错|错误|延迟|卡顿")
+TECH_WORDS = re.compile(r"TPS|tps|内存|日志|报错|错误|延迟|卡顿|spark|Spark|性能剖析|GC|堆内存")
 
 STANDARD_KEYWORDS = re.compile(
     r"为什么|怎么办|原因|怎么|如何|什么意思|解释"
