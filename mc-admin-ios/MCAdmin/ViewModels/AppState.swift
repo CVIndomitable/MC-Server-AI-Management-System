@@ -19,6 +19,7 @@ final class AppState {
 
     // 状态监控
     var serverStatus: ServerStatus?
+    var isBackendOnline = false
 
     // 聊天
     var chatMessages: [ChatMessage] = []
@@ -174,6 +175,7 @@ final class AppState {
         serverId = ""
         chatMessages = []
         serverStatus = nil
+        isBackendOnline = false
 
         KeychainService.delete(key: KeychainService.tokenKey)
         UserDefaults.standard.removeObject(forKey: Keys.serverId)
@@ -216,6 +218,7 @@ final class AppState {
         serverSelected = true
         chatMessages = []
         serverStatus = nil
+        isBackendOnline = false
 
         UserDefaults.standard.set(id, forKey: Keys.serverId)
 
@@ -223,6 +226,9 @@ final class AppState {
         if let token {
             wsManager.connect(token: token, serverId: id)
         }
+
+        // 检测后端是否在线
+        Task { await fetchServerStatus() }
     }
 
     func clearServerSelection() {
@@ -231,6 +237,7 @@ final class AppState {
         serverId = ""
         chatMessages = []
         serverStatus = nil
+        isBackendOnline = false
         UserDefaults.standard.removeObject(forKey: Keys.serverId)
     }
 
@@ -315,6 +322,18 @@ final class AppState {
             UserDefaults.standard.set(tier.rawValue, forKey: Keys.modelTier)
         } else {
             UserDefaults.standard.removeObject(forKey: Keys.modelTier)
+        }
+    }
+
+    // MARK: - 后端状态检测
+
+    func fetchServerStatus() async {
+        guard !serverId.isEmpty else { return }
+        do {
+            serverStatus = try await APIClient.shared.fetchStatus(serverId: serverId)
+            isBackendOnline = true
+        } catch {
+            isBackendOnline = false
         }
     }
 

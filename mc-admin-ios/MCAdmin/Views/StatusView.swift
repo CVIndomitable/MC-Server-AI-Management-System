@@ -64,14 +64,14 @@ struct StatusView: View {
             // AI后端连接
             HStack {
                 Circle()
-                    .fill(appState.wsManager.isConnected ? Theme.online : Theme.red)
+                    .fill(appState.isBackendOnline ? Theme.online : Theme.red)
                     .frame(width: 10, height: 10)
                 Text("AI后端")
                     .font(.subheadline)
                     .foregroundStyle(Theme.textPrimary)
-                Text(appState.wsManager.isConnected ? "已连接" : "未连接")
+                Text(appState.isBackendOnline ? "已连接" : "未连接")
                     .font(.caption)
-                    .foregroundStyle(appState.wsManager.isConnected ? Theme.green : Theme.red)
+                    .foregroundStyle(appState.isBackendOnline ? Theme.green : Theme.red)
                 Spacer()
             }
 
@@ -91,6 +91,18 @@ struct StatusView: View {
                     Text("更新: \(update)")
                         .font(.caption2)
                         .foregroundStyle(Theme.textMuted)
+                }
+            }
+
+            // MC服务器离线时提示数据可能过期
+            if appState.serverStatus?.online != true {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.orange)
+                    Text("模组未连接，显示的是最后一次上报的数��")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.orange)
                 }
             }
         }
@@ -332,9 +344,6 @@ struct StatusView: View {
     // MARK: - 拉取状态
 
     private func fetchStatus() async {
-        guard !appState.serverId.isEmpty else { return }
-        do {
-            appState.serverStatus = try await APIClient.shared.fetchStatus(serverId: appState.serverId)
-        } catch {}
+        await appState.fetchServerStatus()
     }
 }

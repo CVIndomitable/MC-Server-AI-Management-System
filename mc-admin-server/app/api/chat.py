@@ -73,8 +73,11 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
     admin_id = user.get("sub", "admin")
     await require_server_access(admin_id, request.server_id, min_role="admin")
 
-    if not await manager.is_online(request.server_id):
-        raise HTTPException(status_code=503, detail="服务器未连接")
+    server_online = await manager.is_online(request.server_id)
+
+    # 非仅��询模式下，模组必须在线才能执行指令
+    if not server_online and not request.query_only:
+        raise HTTPException(status_code=503, detail="服务器未连接，无法执行指令。可切换到仅查询模��咨询AI")
 
     current_status = await manager.get_status(request.server_id)
     status_data = current_status.get("data") if current_status else None

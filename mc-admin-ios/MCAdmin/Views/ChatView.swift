@@ -90,9 +90,9 @@ struct ChatView: View {
             // AI后端连接状态
             HStack(spacing: 4) {
                 Circle()
-                    .fill(appState.wsManager.isConnected ? Theme.online : Theme.red)
+                    .fill(appState.isBackendOnline ? Theme.online : Theme.red)
                     .frame(width: 6, height: 6)
-                Text(appState.wsManager.isConnected ? "AI在线" : "AI离线")
+                Text(appState.isBackendOnline ? "AI在线" : "AI离线")
                     .font(.caption2)
                     .foregroundStyle(Theme.textMuted)
             }
