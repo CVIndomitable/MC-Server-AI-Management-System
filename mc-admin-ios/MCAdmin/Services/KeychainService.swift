@@ -6,8 +6,9 @@ import Security
 enum KeychainService {
     private static let service = "com.mcadmin.ios"
 
-    static func save(key: String, value: String) {
-        guard let data = value.data(using: .utf8) else { return }
+    @discardableResult
+    static func save(key: String, value: String) -> Bool {
+        guard let data = value.data(using: .utf8) else { return false }
 
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -18,10 +19,16 @@ enum KeychainService {
         // 先删除旧值
         SecItemDelete(query as CFDictionary)
 
-        // 写入新值
+        // 写入新值（设置访问控制：仅本设备解锁时可访问）
         var newItem = query
         newItem[kSecValueData as String] = data
-        SecItemAdd(newItem as CFDictionary, nil)
+        newItem[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+
+        let status = SecItemAdd(newItem as CFDictionary, nil)
+        if status != errSecSuccess {
+            print("[Keychain] Save failed for key '\(key)': \(status)")
+        }
+        return status == errSecSuccess
     }
 
     static func load(key: String) -> String? {
@@ -44,13 +51,15 @@ enum KeychainService {
         return string
     }
 
-    static func delete(key: String) {
+    @discardableResult
+    static func delete(key: String) -> Bool {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
         ]
-        SecItemDelete(query as CFDictionary)
+        let status = SecItemDelete(query as CFDictionary)
+        return status == errSecSuccess || status == errSecItemNotFound
     }
 }
 

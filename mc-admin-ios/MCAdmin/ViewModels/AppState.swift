@@ -267,10 +267,17 @@ final class AppState {
     // MARK: - 聊天
 
     func startChat(_ content: String) {
-        currentChatTask?.cancel()
-        currentChatTask = Task {
+        // 先等待前一个任务取消完成，再启动新任务
+        let previousTask = currentChatTask
+        currentChatTask = nil
+        previousTask?.cancel()
+        let newTask = Task {
+            // 确保前一个任务已完成
+            _ = await previousTask?.value
+            guard !Task.isCancelled else { return }
             await sendMessage(content)
         }
+        currentChatTask = newTask
     }
 
     func cancelChat() {

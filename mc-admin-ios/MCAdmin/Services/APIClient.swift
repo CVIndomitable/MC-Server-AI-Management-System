@@ -30,12 +30,21 @@ actor APIClient {
         var urlString = "\(baseURL)\(path)"
 
         if let query, !query.isEmpty {
-            var components = URLComponents(string: urlString)!
+            guard var components = URLComponents(string: urlString) else {
+                throw APIError.invalidResponse
+            }
             components.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
-            urlString = components.url!.absoluteString
+            guard let resolvedURL = components.url else {
+                throw APIError.invalidResponse
+            }
+            urlString = resolvedURL.absoluteString
         }
 
-        var request = URLRequest(url: URL(string: urlString)!)
+        guard let url = URL(string: urlString) else {
+            throw APIError.invalidResponse
+        }
+
+        var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
@@ -55,7 +64,11 @@ actor APIClient {
 
         switch httpResponse.statusCode {
         case 200..<300:
-            return try JSONDecoder().decode(T.self, from: data)
+            do {
+                return try JSONDecoder().decode(T.self, from: data)
+            } catch let decodingError as DecodingError {
+                throw APIError.server("数据解析失败: \(decodingError.localizedDescription)")
+            }
         case 401:
             throw APIError.unauthorized
         case 403:

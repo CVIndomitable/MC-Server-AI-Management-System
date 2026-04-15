@@ -27,9 +27,23 @@ public class LogCollector extends AbstractAppender {
             if (loggerName != null && loggerName.startsWith("com.mcadmin")) {
                 return;
             }
-            String message = "[" + event.getLevel() + "] "
-                + event.getMessage().getFormattedMessage();
-            statusReporter.addError(message);
+            StringBuilder sb = new StringBuilder();
+            sb.append("[").append(event.getLevel()).append("] ")
+              .append(event.getMessage().getFormattedMessage());
+            // 附加堆栈跟踪前几行（如果有异常）
+            Throwable thrown = event.getThrown();
+            if (thrown != null) {
+                sb.append("\n  ").append(thrown.getClass().getName()).append(": ").append(thrown.getMessage());
+                StackTraceElement[] stack = thrown.getStackTrace();
+                int lines = Math.min(stack.length, 3);
+                for (int i = 0; i < lines; i++) {
+                    sb.append("\n    at ").append(stack[i]);
+                }
+                if (stack.length > lines) {
+                    sb.append("\n    ... ").append(stack.length - lines).append(" more");
+                }
+            }
+            statusReporter.addError(sb.toString());
         }
     }
 

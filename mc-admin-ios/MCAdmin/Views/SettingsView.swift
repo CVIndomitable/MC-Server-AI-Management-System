@@ -332,14 +332,18 @@ struct SettingsView: View {
             do {
                 let resp = try await APIClient.shared.fetchServerUsers(serverId: appState.serverId)
                 serverUsers = resp.users
-            } catch {}
+            } catch {
+                showAlertMessage("加载管理员列表失败: \(error.localizedDescription)")
+            }
         }
 
         if appState.isAdmin {
             do {
                 let resp = try await APIClient.shared.listUsers()
                 allUsers = resp.users
-            } catch {}
+            } catch {
+                showAlertMessage("加载用户列表失败: \(error.localizedDescription)")
+            }
         }
     }
 

@@ -2,11 +2,22 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from typing import Optional
 from app.websocket.manager import manager
 import json
+import re
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# server_id 格式：字母、数字、下划线、连字符，1-64字符
+_VALID_SERVER_ID = re.compile(r'^[a-zA-Z0-9_\-]{1,64}$')
+
+# WebSocket 单条消息最大大小（100KB）
+_MAX_WS_MESSAGE_SIZE = 100 * 1024
+
+# 合法的消息类型
+_VALID_MESSAGE_TYPES = {"status", "result"}
+
 
 @router.websocket("/ws/mod")
 async def mod_websocket(
@@ -25,6 +36,11 @@ async def mod_websocket(
         await websocket.close(code=1008, reason="Missing credentials")
         return
 
+    # 校验 server_id 格式
+    if not _VALID_SERVER_ID.match(server_id):
+        await websocket.close(code=1008, reason="Invalid server_id format")
+        return
+
     connected = await manager.connect(websocket, server_id, token)
     if not connected:
         return
@@ -32,7 +48,29 @@ async def mod_websocket(
     try:
         while True:
             data = await websocket.receive_text()
-            message = json.loads(data)
+
+            # 消息大小限制
+            if len(data) > _MAX_WS_MESSAGE_SIZE:
+                logger.warning(f"WebSocket消息过大 ({len(data)} bytes) from {server_id}")
+                continue
+
+            # JSON解析
+            try:
+                message = json.loads(data)
+            except json.JSONDecodeError:
+                logger.warning(f"WebSocket收到无效JSON from {server_id}")
+                continue
+
+            # 消息格式校验
+            if not isinstance(message, dict) or "type" not in message:
+                logger.warning(f"WebSocket消息缺少type字段 from {server_id}")
+                continue
+
+            # 消息类型白名单
+            if message.get("type") not in _VALID_MESSAGE_TYPES:
+                logger.warning(f"WebSocket收到未知消息类型 '{message.get('type')}' from {server_id}")
+                continue
+
             await manager.handle_message(server_id, message)
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected for {server_id}")

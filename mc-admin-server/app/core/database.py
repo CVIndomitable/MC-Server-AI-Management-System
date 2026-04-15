@@ -15,7 +15,9 @@ class UserDatabase:
 
     async def init(self):
         """初始化数据库，创建所有表"""
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        db_dir = os.path.dirname(self.db_path)
+        os.makedirs(db_dir, exist_ok=True)
+        os.chmod(db_dir, 0o700)
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("PRAGMA journal_mode=WAL")
             await db.execute("PRAGMA foreign_keys=ON")
@@ -64,11 +66,14 @@ class UserDatabase:
         logger.info(f"数据库已初始化: {self.db_path}")
 
     async def ensure_default_admin(self):
-        """首次启动时创建默认管理员账号"""
+        """首次启动时创建默认管理员账号（使用随机密码）"""
         admin = await self.get_user("admin")
         if not admin:
-            await self.create_user("admin", "admin123", role="admin")
-            logger.info("已创建默认管理员账号 admin/admin123，请尽快修改密码")
+            import secrets
+            default_password = secrets.token_urlsafe(16)
+            await self.create_user("admin", default_password, role="admin")
+            logger.warning(f"已创建默认管理员账号 admin，初始密码: {default_password}")
+            logger.warning("请立即登录并修改密码！此密码仅在日志中出现一次。")
 
     async def create_user(self, username: str, password: str, role: str = "user") -> dict | None:
         """创建用户，返回用户信息；用户名重复返回 None"""

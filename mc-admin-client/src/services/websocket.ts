@@ -52,7 +52,12 @@ class WebSocketService {
 
       this.ws.onmessage = (event) => {
         try {
-          const message: WSMessage = JSON.parse(event.data);
+          const raw = JSON.parse(event.data);
+          if (!raw || typeof raw.type !== 'string') {
+            console.warn('收到无效WebSocket消息: 缺少type字段');
+            return;
+          }
+          const message = raw as WSMessage;
           // 处理认证响应
           if (message.type === 'auth_success' || message.type === 'auth_response') {
             this.isAuthenticated = true;
@@ -107,7 +112,11 @@ class WebSocketService {
     }
 
     this.reconnectAttempts++;
-    const delay = CONFIG.reconnectInterval * Math.min(this.reconnectAttempts, 5);
+    // 真正的指数退避: 5s, 10s, 20s, 40s, 60s (上限60s)
+    const delay = Math.min(
+      CONFIG.reconnectInterval * Math.pow(2, this.reconnectAttempts - 1),
+      60000
+    );
 
     console.log(`${delay}ms后尝试第${this.reconnectAttempts}次重连...`);
 
@@ -140,7 +149,7 @@ class WebSocketService {
     this.notifyStatusHandlers(false);
   }
 
-  send(message: WSMessage) {
+  send(message: Record<string, unknown>) {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
     } else {

@@ -132,10 +132,11 @@ public class StatusReporter {
             LOGGER.debug("Reflection TPS collection failed: {}", e.getMessage());
         }
 
-        // Fallback: tickRateManager（返回目标tick率）
+        // Fallback: tickRateManager 只能返回目标tick率，标记为估算值
         double msPerTick = server.tickRateManager().millisecondsPerTick();
         double tps = Math.min(20.0, msPerTick > 0 ? 1000.0 / msPerTick : 20.0);
         data.addProperty("tps", Math.round(tps * 10.0) / 10.0);
+        data.addProperty("tps_estimated", true);
     }
 
     /**

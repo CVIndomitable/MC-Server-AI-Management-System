@@ -11,21 +11,16 @@ export interface ServerStatus {
   timestamp: number;
 }
 
-// WebSocket消息类型
-export interface WSMessage {
-  type: 'auth' | 'status' | 'command' | 'result' | 'chat_response' | 'auth_success' | 'auth_response' | 'auth_failed';
-  server_id?: string;
-  token?: string;
-  timestamp?: number;
-  data?: any;
-  id?: string;
-  action?: string;
-  payload?: any;
-  command_id?: string;
-  success?: boolean;
-  output?: string;
-  message?: string;
-}
+// WebSocket消息类型（使用 discriminated union 替代宽泛的可选字段）
+export type WSMessage =
+  | { type: 'auth'; token: string; server_id: string }
+  | { type: 'auth_success'; server_id?: string }
+  | { type: 'auth_response'; server_id?: string }
+  | { type: 'auth_failed'; message?: string }
+  | { type: 'status'; server_id?: string; data: ServerStatus; timestamp?: number }
+  | { type: 'command'; id: string; action: string; payload: Record<string, unknown> }
+  | { type: 'result'; command_id: string; success: boolean; output: string; server_id?: string }
+  | { type: 'chat_response'; message: string; server_id?: string };
 
 // 聊天消息（客户端展示用）
 export interface ChatMessage {
@@ -48,16 +43,23 @@ export interface ReviewInfo {
   expires_in?: number;
 }
 
+// 命令执行结果
+export interface CommandExecuted {
+  tool: string;
+  input: Record<string, unknown>;
+  result: { success: boolean; output: string };
+}
+
 // AI聊天API响应
 export interface ChatApiResponse {
   message: string;
-  command_executed?: any;
+  command_executed?: CommandExecuted;
   review?: ReviewInfo;
   timestamp: string;
 }
 
 // API响应
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;

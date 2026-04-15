@@ -18,7 +18,7 @@ public class Config {
         "gamemode,tp,give,tell,msg,effect,difficulty,gamerule,seed,title,tellraw,stop," +
         "spark";
 
-    private static final String DEFAULT_DANGEROUS_COMMANDS = "ban,op,deop,stop,whitelist";
+    private static final String DEFAULT_DANGEROUS_COMMANDS = "ban,op,deop,stop,whitelist,execute";
 
     private static Properties props = new Properties();
 

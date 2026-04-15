@@ -222,9 +222,17 @@ class AIAgent:
             self.conversation_history[hkey] = []
         self._touch_conversation(hkey)
 
-        user_msg = {"role": "user", "content": user_message}
+        # 使用结构化消息分离用户输入和系统状态，防止Prompt Injection
         if current_status:
-            user_msg["content"] += f"\n\n当前服务器状态：{json.dumps(current_status, ensure_ascii=False)}"
+            user_msg = {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_message},
+                    {"type": "text", "text": f"[系统附加·当前服务器状态]{json.dumps(current_status, ensure_ascii=False)}"},
+                ]
+            }
+        else:
+            user_msg = {"role": "user", "content": user_message}
 
         self.conversation_history[hkey].append(user_msg)
         self._trim_history(hkey)
@@ -293,10 +301,14 @@ class AIAgent:
             "model_used": model,
         }
 
+        allowed_tools = {t["name"] for t in TOOLS}
         for block in response.content:
             if block.type == "text":
                 result["text"] += block.text
             elif block.type == "tool_use":
+                if block.name not in allowed_tools:
+                    logger.warning(f"AI返回了未知工具调用: {block.name}，已忽略")
+                    continue
                 result["tool_calls"].append({
                     "id": block.id,
                     "name": block.name,
@@ -316,6 +328,11 @@ class AIAgent:
         hkey = (admin_id, server_id)
         if hkey not in self.conversation_history or not self.conversation_history[hkey]:
             return
+
+        # 限制工具结果长度，防止超大结果污染对话
+        max_result_len = 8192
+        if len(result) > max_result_len:
+            result = result[:max_result_len] + "\n...(结果已截断)"
 
         last_msg = self.conversation_history[hkey][-1]
         if last_msg["role"] != "user":

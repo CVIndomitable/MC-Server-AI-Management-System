@@ -31,13 +31,35 @@ class Settings(BaseSettings):
     review_burst_threshold: int = 3         # 频率检测阈值
     review_give_amount_threshold: int = 1000  # give命令数量异常阈值
 
+    # API速率限制
+    chat_rate_limit: int = 10       # 聊天API每分钟最大请求数
+    chat_rate_window: int = 60      # 聊天API速率窗口（秒）
+
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173", "http://192.168.1.6:8081"]
 
-    @field_validator("secret_key", "anthropic_api_key", "mod_auth_token")
+    @field_validator("secret_key")
     @classmethod
-    def validate_required_fields(cls, v: str, info) -> str:
+    def validate_secret_key(cls, v: str) -> str:
         if not v or v.strip() == "":
-            raise ValueError(f"{info.field_name} must not be empty")
+            raise ValueError("secret_key must not be empty")
+        if len(v) < 32:
+            raise ValueError("secret_key must be at least 32 characters for security")
+        return v
+
+    @field_validator("mod_auth_token")
+    @classmethod
+    def validate_mod_auth_token(cls, v: str) -> str:
+        if not v or v.strip() == "":
+            raise ValueError("mod_auth_token must not be empty")
+        if len(v) < 32:
+            raise ValueError("mod_auth_token must be at least 32 characters for security")
+        return v
+
+    @field_validator("anthropic_api_key")
+    @classmethod
+    def validate_api_key(cls, v: str) -> str:
+        if not v or v.strip() == "":
+            raise ValueError("anthropic_api_key must not be empty")
         return v
 
     model_config = {"env_file": ".env", "case_sensitive": False}

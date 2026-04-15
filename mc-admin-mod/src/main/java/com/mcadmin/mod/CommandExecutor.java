@@ -99,10 +99,22 @@ public class CommandExecutor {
         });
     }
 
+    private static final int MAX_COMMAND_LENGTH = 32768;
+    private static final int MAX_RECURSION_DEPTH = 5;
+
     /**
      * 递归检查命令是否在白名单中，包括 /execute ... run 嵌套的子命令
      */
     private boolean isCommandAllowed(String command, Set<String> currentAllowed) {
+        return isCommandAllowedRecursive(command, currentAllowed, 0);
+    }
+
+    private boolean isCommandAllowedRecursive(String command, Set<String> currentAllowed, int depth) {
+        if (depth > MAX_RECURSION_DEPTH) {
+            LOGGER.warn("Command recursion depth exceeded ({}), rejecting: {}", MAX_RECURSION_DEPTH, command);
+            return false;
+        }
+
         String cmd = command.startsWith("/") ? command.substring(1) : command;
         String baseCommand = cmd.split(" ")[0];
 
@@ -116,7 +128,7 @@ public class CommandExecutor {
             int runIdx = lowerCmd.indexOf(" run ");
             if (runIdx >= 0) {
                 String subCommand = cmd.substring(runIdx + 5).trim();
-                return isCommandAllowed(subCommand, currentAllowed);
+                return isCommandAllowedRecursive(subCommand, currentAllowed, depth + 1);
             }
         }
         return true;
@@ -126,6 +138,14 @@ public class CommandExecutor {
      * 递归检查命令是否包含危险子命令
      */
     private boolean containsDangerousCommand(String command) {
+        return containsDangerousCommandRecursive(command, 0);
+    }
+
+    private boolean containsDangerousCommandRecursive(String command, int depth) {
+        if (depth > MAX_RECURSION_DEPTH) {
+            return true; // 过深的嵌套视为危险
+        }
+
         String cmd = command.startsWith("/") ? command.substring(1) : command;
         String baseCommand = cmd.split(" ")[0];
         Set<String> currentDangerous = dangerousCommands;
@@ -139,7 +159,7 @@ public class CommandExecutor {
             int runIdx = lowerCmd.indexOf(" run ");
             if (runIdx >= 0) {
                 String subCommand = cmd.substring(runIdx + 5).trim();
-                return containsDangerousCommand(subCommand);
+                return containsDangerousCommandRecursive(subCommand, depth + 1);
             }
         }
         return false;
@@ -194,6 +214,12 @@ public class CommandExecutor {
         }
 
         String command = payload.get("command").getAsString();
+
+        // 命令长度限制
+        if (command.length() > MAX_COMMAND_LENGTH) {
+            callback.accept(false, "Command too long (" + command.length() + " chars, max " + MAX_COMMAND_LENGTH + ")");
+            return;
+        }
 
         // 移除开头的 /
         if (command.startsWith("/")) {
@@ -282,7 +308,8 @@ public class CommandExecutor {
             // 路径安全校验：必须存在、是文件、可执行、在服务器目录下
             try {
                 String canonicalPath = scriptFile.getCanonicalPath();
-                String serverDir = new File(".").getCanonicalPath();
+                // 使用服务器实际运行目录（而非 File(".") 可能受工作目录影响）
+                String serverDir = server.getServerDirectory().getCanonicalPath();
                 if (!canonicalPath.startsWith(serverDir + File.separator)) {
                     callback.accept(false, "Restart script must be within server directory");
                     return;

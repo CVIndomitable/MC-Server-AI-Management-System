@@ -42,13 +42,15 @@ final class WebSocketManager {
         isAuthenticated = false
     }
 
+    // 共享URLSession，避免每次连接创建新实例
+    private let urlSession = URLSession(configuration: .default)
+
     // MARK: - 内部连接
 
     private func doConnect() {
         guard let url = URL(string: wsURL) else { return }
 
-        let session = URLSession(configuration: .default)
-        webSocket = session.webSocketTask(with: url)
+        webSocket = urlSession.webSocketTask(with: url)
         webSocket?.resume()
 
         sendAuth()
@@ -132,8 +134,9 @@ final class WebSocketManager {
 
         case "chat_response":
             if let msg = json["message"] as? String {
+                let callback = self.onChatResponse
                 Task { @MainActor in
-                    self.onChatResponse?(msg)
+                    callback?(msg)
                 }
             }
 
@@ -176,7 +179,8 @@ final class WebSocketManager {
         guard !intentionalDisconnect, reconnectAttempts < maxReconnectAttempts else { return }
 
         reconnectAttempts += 1
-        let delay = reconnectInterval * Double(min(reconnectAttempts, 5))
+        // 真正的指数退避: 5s, 10s, 20s, 40s, 60s (上限)
+        let delay = min(reconnectInterval * pow(2.0, Double(reconnectAttempts - 1)), 60.0)
 
         reconnectTask?.cancel()
         reconnectTask = Task { [weak self] in

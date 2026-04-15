@@ -5,8 +5,8 @@ import * as SecureStore from 'expo-secure-store';
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
-import { ServerStatus, ChatMessage, UserServerInfo, ServerInfo, ModelTier, SavedAccount } from '../types';
-import apiService from '../services/api';
+import { ServerStatus, ChatMessage, UserServerInfo, ServerInfo, ModelTier, SavedAccount, WSMessage } from '../types';
+import apiService, { setOnUnauthorized } from '../services/api';
 import wsService from '../services/websocket';
 
 const TOKEN_KEY = '@mc_admin_token';
@@ -83,13 +83,13 @@ interface AppState {
   savedAccounts: SavedAccount[];
 
   // WebSocket处理器引用
-  wsMessageHandler: ((message: any) => void) | null;
+  wsMessageHandler: ((message: WSMessage) => void) | null;
   wsStatusHandler: ((connected: boolean) => void) | null;
 
   // Actions
   login: (username: string, password: string) => Promise<boolean>;
   quickLogin: (username: string) => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
   loadSavedAccounts: () => Promise<void>;
   removeSavedAccount: (username: string) => Promise<void>;
   setServerId: (id: string) => void;
@@ -255,14 +255,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch {}
   },
 
-  logout: () => {
+  logout: async () => {
     get().disconnectWebSocket();
     apiService.clearToken();
 
-    SecureStore.deleteItemAsync(TOKEN_KEY);
-    AsyncStorage.removeItem(SERVER_ID_KEY);
-    AsyncStorage.removeItem(USERNAME_KEY);
-    AsyncStorage.removeItem(ROLE_KEY);
+    await Promise.all([
+      SecureStore.deleteItemAsync(TOKEN_KEY).catch(() => {}),
+      AsyncStorage.removeItem(SERVER_ID_KEY).catch(() => {}),
+      AsyncStorage.removeItem(USERNAME_KEY).catch(() => {}),
+      AsyncStorage.removeItem(ROLE_KEY).catch(() => {}),
+    ]);
 
     set({
       isAuthenticated: false,
@@ -379,21 +381,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     wsService.connect(token, serverId);
 
-    const handler = (message: any) => {
+    const handler = (message: WSMessage) => {
       // 过滤非当前服务器的消息，防止切换服务器时旧消息窜入
       const currentServerId = get().serverId;
-      if (message.server_id && message.server_id !== currentServerId) return;
+      if ('server_id' in message && message.server_id && message.server_id !== currentServerId) return;
 
       if (message.type === 'status' && message.data) {
         updateServerStatus(message.data);
       } else if (message.type === 'chat_response' && message.message) {
-        const chatMessage: ChatMessage = {
+        const chatMsg: ChatMessage = {
           id: generateId(),
           role: 'assistant',
           content: message.message,
           timestamp: Date.now(),
         };
-        addChatMessage(chatMessage);
+        addChatMessage(chatMsg);
       }
     };
 
@@ -436,7 +438,18 @@ export const useAppStore = create<AppState>((set, get) => ({
         AsyncStorage.getItem(SHOW_ACTIONS_TAB_KEY).catch(() => null),
       ]);
 
+      // 注入401全局登出回调
+      setOnUnauthorized(() => {
+        get().logout();
+      });
+
       if (token) {
+        // 检查token是否过期
+        if (isTokenExpired(token)) {
+          await get().logout();
+          return;
+        }
+
         apiService.setToken(token);
 
         // 如果没有缓存的用户名，尝试从JWT解析
