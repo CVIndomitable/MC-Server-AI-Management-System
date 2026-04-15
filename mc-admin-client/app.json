@@ -42,6 +42,9 @@
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
+    "experiments": {
+      "baseUrl": "/mc-app"
+    },
     "plugins": [
       "expo-secure-store"
     ]
