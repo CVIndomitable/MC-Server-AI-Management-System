@@ -80,9 +80,9 @@ enum ModelTier: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .flash: return "Flash"
-        case .standard: return "Standard"
-        case .pro: return "Pro"
+        case .flash: return "快速"
+        case .standard: return "标准"
+        case .pro: return "专业"
         }
     }
 }

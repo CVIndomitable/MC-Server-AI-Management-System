@@ -67,7 +67,7 @@ struct ChatView: View {
 
             // 模型选择
             Menu {
-                Button("Auto") { appState.setModelTier(nil) }
+                Button("自动") { appState.setModelTier(nil) }
                 ForEach(ModelTier.allCases, id: \.self) { tier in
                     Button(tier.displayName) { appState.setModelTier(tier) }
                 }
@@ -75,7 +75,7 @@ struct ChatView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "cpu")
                         .font(.caption)
-                    Text(appState.modelTier?.displayName ?? "Auto")
+                    Text(appState.modelTier?.displayName ?? "自动")
                         .font(.caption)
                 }
                 .padding(.horizontal, 10)
