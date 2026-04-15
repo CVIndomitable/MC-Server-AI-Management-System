@@ -55,18 +55,38 @@ struct StatusView: View {
     // MARK: - 连接状态卡片
 
     private var connectionCard: some View {
-        HStack {
-            Circle()
-                .fill(appState.wsManager.isConnected ? Theme.online : Theme.red)
-                .frame(width: 10, height: 10)
-            Text(appState.wsManager.isConnected ? "实时连接正常" : "连接已断开")
-                .font(.subheadline)
-                .foregroundStyle(Theme.textPrimary)
-            Spacer()
-            if let status = appState.serverStatus, let update = status.last_update {
-                Text("更新: \(update)")
-                    .font(.caption2)
-                    .foregroundStyle(Theme.textMuted)
+        VStack(spacing: 10) {
+            // AI后端连接
+            HStack {
+                Circle()
+                    .fill(appState.wsManager.isConnected ? Theme.online : Theme.red)
+                    .frame(width: 10, height: 10)
+                Text("AI后端")
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.textPrimary)
+                Text(appState.wsManager.isConnected ? "已连接" : "未连接")
+                    .font(.caption)
+                    .foregroundStyle(appState.wsManager.isConnected ? Theme.green : Theme.red)
+                Spacer()
+            }
+
+            // MC服务器连接
+            HStack {
+                Circle()
+                    .fill(appState.serverStatus?.online == true ? Theme.online : Theme.red)
+                    .frame(width: 10, height: 10)
+                Text("MC服务器")
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.textPrimary)
+                Text(appState.serverStatus?.online == true ? "在线" : "离线")
+                    .font(.caption)
+                    .foregroundStyle(appState.serverStatus?.online == true ? Theme.green : Theme.red)
+                Spacer()
+                if let status = appState.serverStatus, let update = status.last_update {
+                    Text("更新: \(update)")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.textMuted)
+                }
             }
         }
         .padding()

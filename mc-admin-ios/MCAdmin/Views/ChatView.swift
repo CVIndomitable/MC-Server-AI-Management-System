@@ -87,12 +87,12 @@ struct ChatView: View {
 
             Spacer()
 
-            // WebSocket状态
+            // AI后端连接状态
             HStack(spacing: 4) {
                 Circle()
                     .fill(appState.wsManager.isConnected ? Theme.online : Theme.red)
                     .frame(width: 6, height: 6)
-                Text(appState.wsManager.isConnected ? "已连接" : "未连接")
+                Text(appState.wsManager.isConnected ? "AI在线" : "AI离线")
                     .font(.caption2)
                     .foregroundStyle(Theme.textMuted)
             }
