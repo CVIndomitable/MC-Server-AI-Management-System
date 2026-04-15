@@ -148,12 +148,19 @@ struct MessageBubble: View {
             if message.isUser { Spacer(minLength: 60) }
 
             VStack(alignment: message.isUser ? .trailing : .leading, spacing: 6) {
-                Text(message.content)
-                    .font(.body)
-                    .foregroundStyle(Theme.textPrimary)
-                    .padding(12)
-                    .background(message.isUser ? Theme.primary : Theme.cardBackground)
-                    .cornerRadius(16)
+                if message.isUser {
+                    Text(message.content)
+                        .font(.body)
+                        .foregroundStyle(Theme.textPrimary)
+                        .padding(12)
+                        .background(Theme.primary)
+                        .cornerRadius(16)
+                } else {
+                    MarkdownText(message.content)
+                        .padding(12)
+                        .background(Theme.cardBackground)
+                        .cornerRadius(16)
+                }
 
                 // 审核卡片
                 if let review = message.review, review.isPending {
