@@ -26,6 +26,7 @@
 		CFE659BFE9625C94B36388CF /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB7532FBB05CDC34A22EFBD9 /* SettingsView.swift */; };
 		E5D3C64F57E5F980586655E1 /* ServerSelectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79E2D7FFE69181D50E137B35 /* ServerSelectView.swift */; };
 		F5DFED0F7B73193A256F80FA /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60D6B125B00CAD5D7FDADED4 /* ContentView.swift */; };
+		A1B2C3D4E5F60718A9B0C1D2 /* MarkdownText.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E4F5A6B7C80921E2F3A4B5 /* MarkdownText.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -50,6 +51,7 @@
 		D09801B871C5313886D5D571 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		D77EF1161E754D23548A3020 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		DB7532FBB05CDC34A22EFBD9 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		D3E4F5A6B7C80921E2F3A4B5 /* MarkdownText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownText.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -111,6 +113,7 @@
 				717BC4B9FC99F88179A9BE04 /* ChatView.swift */,
 				6EDB4BF900475B32A6A1636D /* LoginView.swift */,
 				B6111AB0107D3135232B675D /* MainTabView.swift */,
+				D3E4F5A6B7C80921E2F3A4B5 /* MarkdownText.swift */,
 				79E2D7FFE69181D50E137B35 /* ServerSelectView.swift */,
 				DB7532FBB05CDC34A22EFBD9 /* SettingsView.swift */,
 				51D07315C5A2D161295674A1 /* StatusView.swift */,
@@ -222,6 +225,7 @@
 				CC9AA431C06FBD1BFDD0CB85 /* LoginView.swift in Sources */,
 				C8FDFBF2966B426FDA0CA9C7 /* MCAdminApp.swift in Sources */,
 				A92A21A514AD8837A1F48D7A /* MainTabView.swift in Sources */,
+				A1B2C3D4E5F60718A9B0C1D2 /* MarkdownText.swift in Sources */,
 				B568BF0514662E884B05D6B5 /* MemoryModels.swift in Sources */,
 				81DF6064C5558873D6B999CC /* ServerModels.swift in Sources */,
 				E5D3C64F57E5F980586655E1 /* ServerSelectView.swift in Sources */,

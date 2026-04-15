@@ -36,7 +36,8 @@ struct MarkdownText: View {
             Text(code)
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(Theme.green)
-                .padding(language.isEmpty ? 8 : [.horizontal, .bottom], 8)
+                .padding(.horizontal, 8)
+                .padding(.bottom, 8)
                 .padding(.top, language.isEmpty ? 8 : 2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
