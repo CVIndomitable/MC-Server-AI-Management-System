@@ -58,7 +58,7 @@ class ServerStatus(BaseModel):
     cpu_system: Optional[float] = None   # 系统总CPU使用率(%)
     cpu_cores: Optional[int] = None      # CPU核心数
     recent_errors: List[str]
-    last_update: datetime
+    last_update: Optional[datetime] = None
     online: bool
 
 class LoginRequest(BaseModel):

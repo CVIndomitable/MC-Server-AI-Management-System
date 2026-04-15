@@ -2,6 +2,7 @@ import SwiftUI
 
 struct StatusView: View {
     @Environment(AppState.self) private var appState
+    @State private var pollingTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -54,6 +55,18 @@ struct StatusView: View {
         }
         .task {
             await fetchStatus()
+            // 每5秒轮询刷新状态
+            pollingTask = Task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(5))
+                    guard !Task.isCancelled else { break }
+                    await fetchStatus()
+                }
+            }
+        }
+        .onDisappear {
+            pollingTask?.cancel()
+            pollingTask = nil
         }
     }
 

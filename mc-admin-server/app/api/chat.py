@@ -320,7 +320,20 @@ async def get_server_status(server_id: str, user: dict = Depends(verify_token)):
 
     status = await manager.get_status(server_id)
     if not status:
-        raise HTTPException(status_code=404, detail="服务器不存在")
+        # 模组未连接时返回默认离线状态，而不是404
+        return ServerStatus(
+            server_id=server_id,
+            tps=0.0,
+            players=[],
+            memory_used_mb=0,
+            memory_max_mb=0,
+            cpu_process=None,
+            cpu_system=None,
+            cpu_cores=None,
+            recent_errors=[],
+            last_update=None,
+            online=False
+        )
 
     data = status.get("data", {})
     return ServerStatus(
