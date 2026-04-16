@@ -309,7 +309,7 @@ public class CommandExecutor {
             try {
                 String canonicalPath = scriptFile.getCanonicalPath();
                 // 使用服务器实际运行目录（而非 File(".") 可能受工作目录影响）
-                String serverDir = server.getServerDirectory().getCanonicalPath();
+                String serverDir = server.getServerDirectory().toFile().getCanonicalPath();
                 if (!canonicalPath.startsWith(serverDir + File.separator)) {
                     callback.accept(false, "Restart script must be within server directory");
                     return;
