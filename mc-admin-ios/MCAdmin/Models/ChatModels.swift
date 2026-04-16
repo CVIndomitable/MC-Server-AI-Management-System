@@ -60,6 +60,8 @@ struct ChatResponse: Codable {
     let command_executed: AnyCodable?
     let review: ReviewInfo?
     let timestamp: String
+    let degraded: Bool?
+    let degraded_message: String?
 }
 
 // MARK: - 确认请求

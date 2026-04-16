@@ -169,11 +169,19 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
                 ai_agent.add_tool_result(
                     admin_id, request.server_id, tool_call["id"], error_result["output"]
                 )
+        summary = await ai_agent.continue_after_tools(
+            admin_id=admin_id,
+            server_id=request.server_id,
+            user_message=request.message,
+            query_only=request.query_only,
+            model_tier=request.model_tier,
+        )
+        final_text = summary.get("text") or ai_response.get("text", "") or "（已执行，但AI未返回描述）"
         return ChatResponse(
-            message=ai_response.get("text", ""),
+            message=final_text,
             command_executed=executed_commands[0] if executed_commands else None,
             timestamp=datetime.now(),
-            degraded=degraded,
+            degraded=degraded or bool(summary.get("degraded")),
             degraded_message=degraded_message,
         )
 
@@ -301,8 +309,21 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
                 degraded_message=degraded_message,
             )
 
+    if executed_commands:
+        summary = await ai_agent.continue_after_tools(
+            admin_id=admin_id,
+            server_id=request.server_id,
+            user_message=request.message,
+            query_only=request.query_only,
+            model_tier=request.model_tier,
+        )
+        final_text = summary.get("text") or ai_response.get("text", "") or "（已执行，但AI未返回描述）"
+        degraded = degraded or bool(summary.get("degraded"))
+    else:
+        final_text = ai_response.get("text", "")
+
     return ChatResponse(
-        message=ai_response.get("text", ""),
+        message=final_text,
         command_executed=executed_commands[0] if executed_commands else None,
         review=last_review_info,
         timestamp=datetime.now(),

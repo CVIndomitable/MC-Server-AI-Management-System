@@ -326,6 +326,55 @@ class AIAgent:
 
         return result
 
+    async def continue_after_tools(
+        self,
+        admin_id: str,
+        server_id: str,
+        user_message: str,
+        query_only: bool = False,
+        model_tier: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """工具执行完成后，让 AI 基于 tool_result 生成自然语言总结。
+
+        不传 tools 参数以强制 AI 用文本回答，避免二次触发工具调用绕过审核。
+        """
+        hkey = (admin_id, server_id)
+        if hkey not in self.conversation_history or not self.conversation_history[hkey]:
+            return {"text": "", "degraded": False}
+
+        model = self._resolve_model(user_message, query_only, model_tier)
+        base_prompt = QUERY_ONLY_PROMPT_BASE if query_only else SYSTEM_PROMPT_BASE
+        system_prompt = await self._build_system_prompt(
+            base_prompt, admin_id, server_id, user_message=user_message
+        )
+
+        create_params = {
+            "model": model,
+            "max_tokens": 2048,
+            "system": system_prompt,
+            "messages": self.conversation_history[hkey],
+        }
+
+        try:
+            response, used_provider, degraded = await provider_pool.call_with_failover(**create_params)
+        except Exception as e:
+            logger.warning(f"工具后续 LLM 调用失败: {e}")
+            return {"text": "", "degraded": False}
+
+        self.conversation_history[hkey].append({"role": "assistant", "content": response.content})
+        self._trim_history(hkey)
+
+        text = ""
+        for block in response.content:
+            if getattr(block, "type", None) == "text":
+                text += block.text
+
+        return {
+            "text": text,
+            "provider_used": used_provider.get("name") if used_provider else None,
+            "degraded": degraded,
+        }
+
     def add_tool_result(self, admin_id: str, server_id: str, tool_use_id: str, result: str):
         hkey = (admin_id, server_id)
         if hkey not in self.conversation_history or not self.conversation_history[hkey]:

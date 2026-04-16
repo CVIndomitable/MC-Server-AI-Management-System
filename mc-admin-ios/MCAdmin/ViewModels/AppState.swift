@@ -309,10 +309,15 @@ final class AppState {
 
             guard !Task.isCancelled else { return }
 
-            // 过滤空响应
-            let text = response.message.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !text.isEmpty {
-                let assistantMsg = ChatMessage.assistant(response.message, review: response.review)
+            var text = response.message.trimmingCharacters(in: .whitespacesAndNewlines)
+            if text.isEmpty && response.review == nil {
+                text = "（AI 未返回描述，请重试或换个问法）"
+            }
+            if response.degraded == true, let warn = response.degraded_message, !warn.isEmpty {
+                text = "⚠️ \(warn)\n\n\(text)"
+            }
+            if !text.isEmpty || response.review != nil {
+                let assistantMsg = ChatMessage.assistant(text, review: response.review)
                 chatMessages.append(assistantMsg)
             }
         } catch is CancellationError {
