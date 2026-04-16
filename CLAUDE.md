@@ -23,9 +23,7 @@ AI辅助Minecraft服务器管理系统，三个子项目：
 
 ## 详细规范
 
-子项目类设计、API路由、AI Agent、WebSocket协议 JSON 示例、开发进度等详见：
-
-- [`docs/ARCHITECTURE_DETAILS.md`](docs/ARCHITECTURE_DETAILS.md)
+子项目类设计、API 路由、AI Agent、WebSocket 协议 JSON 示例、开发进度等详见 [`README.md`](README.md) 的「详细规范」与「通信协议」章节。
 
 ## 编码约定
 

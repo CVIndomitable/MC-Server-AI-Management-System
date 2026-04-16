@@ -136,6 +136,66 @@ open MCAdmin.xcodeproj
 }
 ```
 
+## 详细规范
+
+### mc-admin-mod（NeoForge 模组）
+
+- **构建**：Gradle + NeoGradle，产物 `mcadmin-mod-1.0.1.jar`
+- **包名**：`com.mcadmin.mod`
+- **核心类**：
+  - `MCAdminMod` — 模组入口，生命周期管理
+  - `WebSocketManager` — 使用 Java 内置 `java.net.http.WebSocket`，无外部依赖
+  - `StatusReporter` — 每 5 秒上报 TPS、玩家、内存、错误日志
+  - `CommandExecutor` — 主线程执行命令（`ServerTickEvent` 调度），含命令白名单
+  - `LogCollector` — 拦截 WARN/ERROR 级别日志
+  - `Config` — 配置管理（WS 地址、token、server_id）
+- **已知坑**：Gson 已内置于 Minecraft，无需额外打包；ASM 版本冲突需 force resolution 到 9.7
+
+### mc-admin-server（云端后端）
+
+- **部署**：Docker Compose（`api` + `redis` 两个服务），暴露端口 8000
+- **数据库**：SQLite（用户/服务器持久化）+ Redis 7（命令缓存 + 记忆合并）
+- **API 路由**：
+  - `/api/v1/auth` — 登录、注册（管理员创建）、改密、重置密码、用户 CRUD
+  - `/api/v1/chat` — AI 对话，支持指定模型等级和仅查询模式
+  - `/api/v1/servers` — 服务器列表、绑定/解绑、审批申请、重命名、管理员列表
+  - `/api/v1/memory` — 三级记忆系统 CRUD
+  - `/ws/mod` — 模组 WebSocket 连接端点
+- **AI Agent**：
+  - 通过 Anthropic SDK 调用大模型，`base_url` 可配置（支持兼容 API 网关）
+  - 三级模型路由：flash → standard → pro，按关键词和消息长度自动选择，客户端也可指定
+  - Function Calling 工具：`execute_command`、`kick_player`、`op_player`、`deop_player`、`get_status`、`restart_server`、`broadcast`
+  - 仅查询模式：AI 只给建议，不执行任何操作
+  - Redis 命令缓存：相同消息跳过大模型调用，LFU 淘汰，默认 1 小时 TTL
+  - 三级长期记忆（全局/管理员/服务器级）注入 System Prompt
+  - 多轮对话，每服务器保留 50 条历史
+- **用户与权限**：
+  - bcrypt 加密密码，JWT 认证（默认 7 天过期）
+  - 系统角色：`admin` / `user`
+  - 服务器角色：`owner`（首个绑定者）/ `admin`（审批加入）
+  - 用户-服务器绑定系统，支持权限隔离和审批流程
+
+### mc-admin-client（Expo 跨平台客户端）
+
+- **状态管理**：Zustand
+- **HTTP 客户端**：Axios
+- **页面**：
+  - `LoginScreen` — 用户登录
+  - `ServerSelectScreen` — 服务器选择、绑定、审批待处理申请
+  - `ChatScreen` — AI 对话
+  - `StatusScreen` — 实时监控（TPS、内存图表、玩家列表）
+  - `ActionsScreen` — 快捷操作按钮
+  - `SettingsScreen` — 账号、改密、服务器管理（重命名/解绑）、用户管理（注册/删除/重置密码）
+
+### 约束与注意事项
+
+- 面板服出站连接能力需实际验证，如果不通则回退到 HTTP 轮询方案
+- 大模型 `base_url` 可配置，支持任何兼容 Anthropic API 的网关
+- 模组侧命令执行必须在服务器主线程（通过 `ServerTickEvent` 调度）
+- 客户端 ↔ 后端走 HTTPS，后端 ↔ 模组 WS 也应加 TLS（`wss://`）
+- 敏感配置（token、API key）走环境变量 `.env`，不硬编码
+- `docs/` 目录含敏感服务器信息和 key，已在 `.gitignore` 中排除，禁止提交
+
 ## 项目结构
 
 ```
