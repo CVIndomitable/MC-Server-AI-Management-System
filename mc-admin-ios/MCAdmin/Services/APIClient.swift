@@ -210,6 +210,24 @@ actor APIClient {
     func healthCheck() async throws -> HealthResponse {
         try await request("GET", path: "/api/v1/health")
     }
+
+    // MARK: - Provider 管理（仅管理员）
+
+    func listProviders() async throws -> ProvidersResponse {
+        try await request("GET", path: "/api/v1/admin/providers")
+    }
+
+    func createProvider(_ req: ProviderCreateRequest) async throws -> ApiProvider {
+        try await request("POST", path: "/api/v1/admin/providers", body: req)
+    }
+
+    func updateProvider(id: Int, req: ProviderUpdateRequest) async throws -> ApiProvider {
+        try await request("PUT", path: "/api/v1/admin/providers/\(id)", body: req)
+    }
+
+    func deleteProvider(id: Int) async throws -> MessageResponse {
+        try await request("DELETE", path: "/api/v1/admin/providers/\(id)")
+    }
 }
 
 // MARK: - 错误类型

@@ -47,6 +47,7 @@ struct SettingsView: View {
                     // 用户管理（管理员）
                     if appState.isAdmin {
                         userManagementSection
+                        systemSection
                     }
                 }
                 .scrollContentBackground(.hidden)
@@ -191,6 +192,20 @@ struct SettingsView: View {
                 }
                 .listRowBackground(Theme.cardBackground)
             }
+        }
+    }
+
+    // MARK: - 系统管理（管理员）
+
+    private var systemSection: some View {
+        Section("系统管理") {
+            NavigationLink {
+                ProvidersView()
+            } label: {
+                Label("LLM 供应商", systemImage: "server.rack")
+                    .foregroundStyle(Theme.primary)
+            }
+            .listRowBackground(Theme.cardBackground)
         }
     }
 
