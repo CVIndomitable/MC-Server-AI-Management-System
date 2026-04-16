@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Dict
 from datetime import datetime
 
 # WebSocket消息模型
@@ -178,6 +178,8 @@ class ApiProviderInfo(BaseModel):
     api_key_tail: str  # key 的最后 4 位，用于识别（完整 key 不返回客户端）
     priority: int
     enabled: bool
+    # 模型名映射：canonical 模型名 → 该 provider 实际模型名，None 表示无映射（原样透传）
+    model_map: Optional[Dict[str, str]] = None
     created_at: str
     updated_at: str
 
@@ -190,6 +192,7 @@ class ApiProviderCreateRequest(BaseModel):
     api_key: str = Field(min_length=1, max_length=512)
     priority: int = 100
     enabled: bool = True
+    model_map: Optional[Dict[str, str]] = None
 
 class ApiProviderUpdateRequest(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=64)
@@ -197,3 +200,5 @@ class ApiProviderUpdateRequest(BaseModel):
     api_key: Optional[str] = Field(default=None, min_length=1, max_length=512)  # 留空表示不改
     priority: Optional[int] = None
     enabled: Optional[bool] = None
+    model_map: Optional[Dict[str, str]] = None  # 传 {} 清空映射，None 表示不改
+    clear_model_map: bool = False

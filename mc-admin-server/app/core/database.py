@@ -1,4 +1,5 @@
 import aiosqlite
+import json
 import os
 import logging
 from datetime import datetime, timezone
@@ -70,10 +71,16 @@ class UserDatabase:
                     api_key TEXT NOT NULL,
                     priority INTEGER NOT NULL DEFAULT 100,
                     enabled INTEGER NOT NULL DEFAULT 1,
+                    model_map TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
             """)
+            # 已有库的老表补 model_map 列（JSON 映射：canonical 模型名 → 该 provider 实际模型名）
+            try:
+                await db.execute("ALTER TABLE api_providers ADD COLUMN model_map TEXT")
+            except aiosqlite.OperationalError:
+                pass  # 列已存在
             await db.commit()
         logger.info(f"数据库已初始化: {self.db_path}")
 
@@ -381,6 +388,21 @@ class UserDatabase:
 
     # ===================== LLM API 供应商 =====================
 
+    @staticmethod
+    def _row_to_provider(row) -> dict:
+        """把 sqlite row 转成 dict，同时把 model_map JSON 字段解析成 dict"""
+        d = dict(row)
+        raw = d.get("model_map")
+        if raw:
+            try:
+                d["model_map"] = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                logger.warning(f"provider #{d.get('id')} model_map JSON 解析失败，忽略")
+                d["model_map"] = None
+        else:
+            d["model_map"] = None
+        return d
+
     async def list_providers(self, only_enabled: bool = False) -> list[dict]:
         """列出所有 API 供应商，按 priority 升序（数字小=优先级高）"""
         async with aiosqlite.connect(self.db_path) as db:
@@ -391,27 +413,29 @@ class UserDatabase:
             sql += " ORDER BY priority ASC, id ASC"
             async with db.execute(sql) as cursor:
                 rows = await cursor.fetchall()
-                return [dict(row) for row in rows]
+                return [self._row_to_provider(row) for row in rows]
 
     async def get_provider(self, provider_id: int) -> dict | None:
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
             async with db.execute("SELECT * FROM api_providers WHERE id = ?", (provider_id,)) as cursor:
                 row = await cursor.fetchone()
-                return dict(row) if row else None
+                return self._row_to_provider(row) if row else None
 
     async def create_provider(
         self, name: str, base_url: str, api_key: str,
         priority: int = 100, enabled: bool = True,
+        model_map: dict | None = None,
     ) -> dict | None:
         """创建 API 供应商；name 重复返回 None"""
         now = datetime.now(timezone.utc).isoformat()
+        map_json = json.dumps(model_map, ensure_ascii=False) if model_map else None
         try:
             async with aiosqlite.connect(self.db_path) as db:
                 cursor = await db.execute(
-                    "INSERT INTO api_providers (name, base_url, api_key, priority, enabled, created_at, updated_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (name, base_url, api_key, priority, 1 if enabled else 0, now, now),
+                    "INSERT INTO api_providers (name, base_url, api_key, priority, enabled, model_map, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (name, base_url, api_key, priority, 1 if enabled else 0, map_json, now, now),
                 )
                 await db.commit()
                 return await self.get_provider(cursor.lastrowid)
@@ -425,8 +449,10 @@ class UserDatabase:
         api_key: str | None = None,
         priority: int | None = None,
         enabled: bool | None = None,
+        model_map: dict | None = None,
+        clear_model_map: bool = False,
     ) -> dict | None:
-        """更新 API 供应商；api_key 传 None 表示不改"""
+        """更新 API 供应商；api_key 传 None 表示不改；model_map 传 None 且 clear_model_map=False 表示不改"""
         fields, values = [], []
         if name is not None:
             fields.append("name = ?"); values.append(name)
@@ -438,6 +464,10 @@ class UserDatabase:
             fields.append("priority = ?"); values.append(priority)
         if enabled is not None:
             fields.append("enabled = ?"); values.append(1 if enabled else 0)
+        if clear_model_map:
+            fields.append("model_map = ?"); values.append(None)
+        elif model_map is not None:
+            fields.append("model_map = ?"); values.append(json.dumps(model_map, ensure_ascii=False))
         if not fields:
             return await self.get_provider(provider_id)
         fields.append("updated_at = ?")

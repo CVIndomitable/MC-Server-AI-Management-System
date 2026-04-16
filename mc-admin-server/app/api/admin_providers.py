@@ -33,6 +33,7 @@ def _to_info(row: dict) -> ApiProviderInfo:
         api_key_tail=_mask_key(row["api_key"]),
         priority=row["priority"],
         enabled=bool(row["enabled"]),
+        model_map=row.get("model_map"),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -59,6 +60,7 @@ async def create_provider(
         api_key=req.api_key.strip(),
         priority=req.priority,
         enabled=req.enabled,
+        model_map=req.model_map,
     )
     if not row:
         raise HTTPException(status_code=409, detail="供应商名称已存在")
@@ -87,6 +89,8 @@ async def update_provider(
         api_key=api_key or None,
         priority=req.priority,
         enabled=req.enabled,
+        model_map=req.model_map,
+        clear_model_map=req.clear_model_map,
     )
     if not row:
         raise HTTPException(status_code=409, detail="更新失败，可能名称冲突")

@@ -88,12 +88,23 @@ class ProviderPool:
             raise NoProviderAvailableError("未配置任何 LLM API 供应商")
 
         last_error: Optional[Exception] = None
+        requested_model = create_params.get("model")
         for idx, provider in enumerate(self._providers):
             client = self._clients.get(provider["id"])
             if client is None:
                 continue
+            # 按 provider 的 model_map 替换模型名；无映射则原样透传
+            params = dict(create_params)
+            model_map = provider.get("model_map") or {}
+            if requested_model and requested_model in model_map:
+                mapped = model_map[requested_model]
+                if mapped and mapped != requested_model:
+                    logger.debug(
+                        f"Provider '{provider['name']}' 模型映射: {requested_model} → {mapped}"
+                    )
+                    params["model"] = mapped
             try:
-                response = await client.messages.create(**create_params)
+                response = await client.messages.create(**params)
                 degraded = idx > 0
                 if degraded:
                     logger.warning(
