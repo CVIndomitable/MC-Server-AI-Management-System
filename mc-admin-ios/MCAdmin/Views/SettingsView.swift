@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
+    @AppStorage("actionsTabEnabled") private var actionsTabEnabled = false
 
     // 改密码
     @State private var showChangePassword = false
@@ -38,6 +39,9 @@ struct SettingsView: View {
                 List {
                     // 账号信息
                     accountSection
+
+                    // 界面设置
+                    interfaceSection
 
                     // 服务器管理（选中服务器时）
                     if appState.serverSelected {
@@ -110,6 +114,19 @@ struct SettingsView: View {
             Button("退出登录") { appState.logout() }
                 .foregroundStyle(Theme.red)
                 .listRowBackground(Theme.cardBackground)
+        }
+    }
+
+    // MARK: - 界面设置
+
+    private var interfaceSection: some View {
+        Section("界面") {
+            Toggle(isOn: $actionsTabEnabled) {
+                Label("显示快捷操作", systemImage: "bolt.fill")
+                    .foregroundStyle(Theme.textPrimary)
+            }
+            .tint(Theme.primary)
+            .listRowBackground(Theme.cardBackground)
         }
     }
 

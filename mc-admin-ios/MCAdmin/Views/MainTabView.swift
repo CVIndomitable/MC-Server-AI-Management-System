@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MainTabView: View {
     @Environment(AppState.self) private var appState
+    @AppStorage("actionsTabEnabled") private var actionsTabEnabled = false
 
     var body: some View {
         TabView {
@@ -15,10 +16,12 @@ struct MainTabView: View {
                     Label("状态", systemImage: "chart.bar")
                 }
 
-            ActionsView()
-                .tabItem {
-                    Label("操作", systemImage: "bolt.fill")
-                }
+            if actionsTabEnabled {
+                ActionsView()
+                    .tabItem {
+                        Label("操作", systemImage: "bolt.fill")
+                    }
+            }
 
             SettingsView()
                 .tabItem {
