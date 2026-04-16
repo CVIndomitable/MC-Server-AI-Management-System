@@ -3,6 +3,7 @@ from config.settings import settings
 from typing import List, Dict, Any, Optional
 from app.services.memory import memory_service
 from app.services.command_cache import command_cache
+from app.services.ai_client import provider_pool
 import json
 import re
 import logging
@@ -11,10 +12,8 @@ import copy
 
 logger = logging.getLogger(__name__)
 
-client = AsyncAnthropic(
-    api_key=settings.anthropic_api_key,
-    base_url=settings.anthropic_base_url,
-)
+# 兼容别名：供 command_reviewer.ai_client 等旧引用使用（已迁移至 provider_pool）
+client: AsyncAnthropic | None = None
 
 SYSTEM_PROMPT_BASE = """你是一个Minecraft服务器管理助手。你可以通过以下工具管理服务器：
 
@@ -251,6 +250,7 @@ class AIAgent:
                     "tool_calls": [],
                     "model_used": cached.get("model_used", "cache"),
                     "cache_hit": True,
+                    "degraded": False,
                 }
                 content_blocks = []
                 if cached["text"]:
@@ -290,7 +290,7 @@ class AIAgent:
         if not query_only:
             create_params["tools"] = TOOLS
 
-        response = await client.messages.create(**create_params)
+        response, used_provider, degraded = await provider_pool.call_with_failover(**create_params)
 
         assistant_msg = {"role": "assistant", "content": response.content}
         self.conversation_history[hkey].append(assistant_msg)
@@ -299,6 +299,8 @@ class AIAgent:
             "text": "",
             "tool_calls": [],
             "model_used": model,
+            "provider_used": used_provider.get("name"),
+            "degraded": degraded,
         }
 
         allowed_tools = {t["name"] for t in TOOLS}

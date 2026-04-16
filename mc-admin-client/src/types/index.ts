@@ -56,6 +56,28 @@ export interface ChatApiResponse {
   command_executed?: CommandExecuted;
   review?: ReviewInfo;
   timestamp: string;
+  degraded?: boolean;
+  degraded_message?: string;
+}
+
+// LLM 供应商管理
+export interface ApiProviderInfo {
+  id: number;
+  name: string;
+  base_url: string;
+  api_key_tail: string;
+  priority: number;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiProviderPayload {
+  name?: string;
+  base_url?: string;
+  api_key?: string;  // 留空表示不改
+  priority?: number;
+  enabled?: boolean;
 }
 
 // API响应

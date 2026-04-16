@@ -2,14 +2,15 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from app.api import auth, chat, memory, servers
+from app.api import auth, chat, memory, servers, admin_providers
 from app.websocket import routes as ws_routes
 from app.core.database import user_db
 from app.services.memory import memory_service
 from app.services.memory_consolidator import memory_consolidator
 from app.services.command_cache import command_cache
 from app.services.command_reviewer import command_reviewer
-from app.services.ai_agent import ai_agent, client as anthropic_client
+from app.services.ai_agent import ai_agent
+from app.services.ai_client import provider_pool
 from app.websocket.manager import manager
 from config.settings import settings
 import logging
@@ -28,11 +29,25 @@ async def lifespan(app: FastAPI):
     await user_db.init()
     await user_db.ensure_default_admin()
 
+    # 启动：首次启动回填默认 provider（基于 .env 配置），向后兼容
+    if await user_db.count_providers() == 0:
+        if settings.anthropic_api_key:
+            await user_db.create_provider(
+                name="default",
+                base_url=settings.anthropic_base_url,
+                api_key=settings.anthropic_api_key,
+                priority=100,
+                enabled=True,
+            )
+            logger.info("已从 .env 创建默认 LLM 供应商 'default'")
+
+    # 启动：初始化 LLM 供应商池
+    await provider_pool.init()
+
     # 启动：初始化记忆服务和后台整理任务
     try:
         await memory_service.init()
         await command_cache.init()
-        command_reviewer.ai_client = anthropic_client
         await command_reviewer.init()
         await memory_consolidator.start(
             get_conversation_fn=lambda admin_id, server_id: ai_agent.conversation_history.get((admin_id, server_id), [])
@@ -52,6 +67,7 @@ async def lifespan(app: FastAPI):
     await command_reviewer.close()
     await command_cache.close()
     await memory_service.close()
+    await provider_pool.close()
 
 
 app = FastAPI(title="MC Admin Server", version="1.0.0", lifespan=lifespan)
@@ -78,6 +94,7 @@ app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(servers.router)
 app.include_router(memory.router)
+app.include_router(admin_providers.router)
 app.include_router(ws_routes.router)
 
 @app.get("/")

@@ -7,16 +7,11 @@ import logging
 import time
 from typing import Optional, Callable
 
-from anthropic import AsyncAnthropic
 from config.settings import settings
 from app.services.memory import memory_service, MEMORY_TAGS, VALID_TAGS
+from app.services.ai_client import provider_pool
 
 logger = logging.getLogger(__name__)
-
-client = AsyncAnthropic(
-    api_key=settings.anthropic_api_key,
-    base_url=settings.anthropic_base_url,
-)
 
 # 生成标签说明文本
 _TAG_DESCRIPTIONS = "\n".join(
@@ -166,7 +161,7 @@ async def consolidate_session(admin_id: str, server_id: str, conversation_histor
 
     try:
         # 使用 flash 模型整理，节省费用
-        response = await client.messages.create(
+        response, _provider, _degraded = await provider_pool.call_with_failover(
             model=settings.model_flash,
             max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
@@ -257,7 +252,7 @@ async def _compress_memory(mem_type: str, content: str) -> Optional[str]:
     limit = limits.get(mem_type, 1000)
 
     try:
-        response = await client.messages.create(
+        response, _provider, _degraded = await provider_pool.call_with_failover(
             model=settings.model_flash,
             max_tokens=2048,
             messages=[{

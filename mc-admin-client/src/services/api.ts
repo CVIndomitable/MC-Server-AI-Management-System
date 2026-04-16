@@ -4,6 +4,7 @@ import {
   ApiResponse, AuthCredentials, AuthToken, ChatApiResponse,
   UserServerInfo, ServerInfo, BindRequestInfo, ServerUserInfo,
   UserInfo, ModelTier, MemoryResponse, ReviewInfo,
+  ApiProviderInfo, ApiProviderPayload,
 } from '../types';
 
 // 全局登出回调（由 store 注入）
@@ -313,6 +314,48 @@ class ApiService {
       return { success: true, data: response.data };
     } catch (error) {
       return { success: false, error: this.getChineseError(error as AxiosError, '更新记忆失败') };
+    }
+  }
+
+  // ---- LLM 供应商管理（仅管理员） ----
+
+  async listProviders(): Promise<ApiResponse<{ providers: ApiProviderInfo[] }>> {
+    try {
+      const response = await this.client.get('/api/v1/admin/providers');
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: this.getChineseError(error as AxiosError<{ detail?: string }>, '获取供应商列表失败') };
+    }
+  }
+
+  async createProvider(payload: ApiProviderPayload): Promise<ApiResponse<ApiProviderInfo>> {
+    try {
+      const response = await this.client.post('/api/v1/admin/providers', payload);
+      return { success: true, data: response.data };
+    } catch (error) {
+      const axiosErr = error as AxiosError<{ detail?: string }>;
+      if (axiosErr.response?.status === 409) {
+        return { success: false, error: axiosErr.response.data?.detail || '名称已存在' };
+      }
+      return { success: false, error: this.getChineseError(axiosErr, '创建供应商失败') };
+    }
+  }
+
+  async updateProvider(providerId: number, payload: ApiProviderPayload): Promise<ApiResponse<ApiProviderInfo>> {
+    try {
+      const response = await this.client.put(`/api/v1/admin/providers/${providerId}`, payload);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: this.getChineseError(error as AxiosError<{ detail?: string }>, '更新供应商失败') };
+    }
+  }
+
+  async deleteProvider(providerId: number): Promise<ApiResponse> {
+    try {
+      const response = await this.client.delete(`/api/v1/admin/providers/${providerId}`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: this.getChineseError(error as AxiosError<{ detail?: string }>, '删除供应商失败') };
     }
   }
 

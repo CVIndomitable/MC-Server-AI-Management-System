@@ -117,12 +117,20 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
         logger.error(f"AI processing failed: {e}")
         raise HTTPException(status_code=500, detail="AI处理失败，请稍后重试")
 
+    degraded = bool(ai_response.get("degraded"))
+    degraded_message = (
+        f"主 LLM 供应商不可用，已切换到备用供应商「{ai_response.get('provider_used')}」"
+        if degraded else None
+    )
+
     # 仅查询模式下跳过工具执行
     if request.query_only:
         return ChatResponse(
             message=ai_response.get("text", ""),
             command_executed=None,
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
+            degraded=degraded,
+            degraded_message=degraded_message,
         )
 
     tool_calls = ai_response.get("tool_calls", [])
@@ -130,7 +138,9 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
         return ChatResponse(
             message=ai_response.get("text", ""),
             command_executed=None,
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
+            degraded=degraded,
+            degraded_message=degraded_message,
         )
 
     # ======== 缓存命中快速通道：跳过审核直接执行 ========
@@ -162,7 +172,9 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
         return ChatResponse(
             message=ai_response.get("text", ""),
             command_executed=executed_commands[0] if executed_commands else None,
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
+            degraded=degraded,
+            degraded_message=degraded_message,
         )
 
     # ======== 命令审核流程 ========
@@ -235,6 +247,8 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
                 command_executed=None,
                 review=last_review_info,
                 timestamp=datetime.now(),
+                degraded=degraded,
+                degraded_message=degraded_message,
             )
 
         elif review_result.decision == ReviewDecision.PENDING:
@@ -263,6 +277,8 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
                         reason="审核服务不可用，操作已拦截",
                     ),
                     timestamp=datetime.now(),
+                    degraded=degraded,
+                    degraded_message=degraded_message,
                 )
             pending_review = ReviewInfo(
                 status="pending_confirmation",
@@ -281,13 +297,17 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
                 command_executed=None,
                 review=pending_review,
                 timestamp=datetime.now(),
+                degraded=degraded,
+                degraded_message=degraded_message,
             )
 
     return ChatResponse(
         message=ai_response.get("text", ""),
         command_executed=executed_commands[0] if executed_commands else None,
         review=last_review_info,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
+        degraded=degraded,
+        degraded_message=degraded_message,
     )
 
 

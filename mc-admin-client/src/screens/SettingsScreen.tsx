@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useAppStore } from '../services/store';
 import apiService from '../services/api';
-import { UserInfo, ServerUserInfo } from '../types';
+import { UserInfo, ServerUserInfo, ApiProviderInfo } from '../types';
 
 export default function SettingsScreen() {
   const { username, userRole, serverId, myServers, logout, fetchMyServers, showActionsTab, toggleActionsTab } = useAppStore();
@@ -39,6 +39,16 @@ export default function SettingsScreen() {
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [serverName, setServerName] = useState('');
 
+  // LLM 供应商管理
+  const [providers, setProviders] = useState<ApiProviderInfo[]>([]);
+  const [showProviderModal, setShowProviderModal] = useState(false);
+  const [editingProvider, setEditingProvider] = useState<ApiProviderInfo | null>(null);
+  const [pName, setPName] = useState('');
+  const [pBaseUrl, setPBaseUrl] = useState('');
+  const [pApiKey, setPApiKey] = useState('');
+  const [pPriority, setPPriority] = useState('100');
+  const [pEnabled, setPEnabled] = useState(true);
+
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -50,6 +60,7 @@ export default function SettingsScreen() {
 
     if (isSystemAdmin) {
       promises.push(loadUsers());
+      promises.push(loadProviders());
     }
     if (serverId) {
       promises.push(loadServerUsers());
@@ -76,6 +87,93 @@ export default function SettingsScreen() {
     if (result.success && result.data) {
       setServerUsers(result.data.users);
     }
+  };
+
+  const loadProviders = async () => {
+    const result = await apiService.listProviders();
+    if (result.success && result.data) {
+      setProviders(result.data.providers);
+    }
+  };
+
+  // ---- 供应商管理 ----
+  const openAddProvider = () => {
+    setEditingProvider(null);
+    setPName('');
+    setPBaseUrl('https://api.anthropic.com');
+    setPApiKey('');
+    setPPriority(String((providers[providers.length - 1]?.priority ?? 100) + 10));
+    setPEnabled(true);
+    setShowProviderModal(true);
+  };
+
+  const openEditProvider = (p: ApiProviderInfo) => {
+    setEditingProvider(p);
+    setPName(p.name);
+    setPBaseUrl(p.base_url);
+    setPApiKey('');  // 留空=不改
+    setPPriority(String(p.priority));
+    setPEnabled(p.enabled);
+    setShowProviderModal(true);
+  };
+
+  const submitProvider = async () => {
+    const priorityNum = parseInt(pPriority, 10);
+    if (!pName.trim()) { Alert.alert('提示', '请输入名称'); return; }
+    if (!pBaseUrl.trim()) { Alert.alert('提示', '请输入 Base URL'); return; }
+    if (Number.isNaN(priorityNum)) { Alert.alert('提示', '优先级必须是整数'); return; }
+    if (!editingProvider && !pApiKey.trim()) { Alert.alert('提示', '请输入 API Key'); return; }
+
+    const payload = {
+      name: pName.trim(),
+      base_url: pBaseUrl.trim(),
+      api_key: pApiKey.trim() || undefined,
+      priority: priorityNum,
+      enabled: pEnabled,
+    };
+
+    const result = editingProvider
+      ? await apiService.updateProvider(editingProvider.id, payload)
+      : await apiService.createProvider(payload);
+
+    if (result.success) {
+      setShowProviderModal(false);
+      await loadProviders();
+    } else {
+      Alert.alert('失败', result.error || '操作失败');
+    }
+  };
+
+  const handleDeleteProvider = (p: ApiProviderInfo) => {
+    Alert.alert('确认删除', `删除供应商「${p.name}」？`, [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '删除',
+        style: 'destructive',
+        onPress: async () => {
+          const result = await apiService.deleteProvider(p.id);
+          if (result.success) {
+            await loadProviders();
+          } else {
+            Alert.alert('失败', result.error || '删除失败');
+          }
+        },
+      },
+    ]);
+  };
+
+  const movePriority = async (p: ApiProviderInfo, delta: number) => {
+    // 相邻交换：找到目标 provider，交换 priority
+    const sorted = [...providers].sort((a, b) => a.priority - b.priority);
+    const idx = sorted.findIndex(x => x.id === p.id);
+    const target = sorted[idx + delta];
+    if (!target) return;
+    const r1 = await apiService.updateProvider(p.id, { priority: target.priority });
+    const r2 = await apiService.updateProvider(target.id, { priority: p.priority });
+    if (!r1.success || !r2.success) {
+      Alert.alert('失败', '调整优先级失败');
+    }
+    await loadProviders();
   };
 
   // ---- 修改密码 ----
@@ -367,6 +465,67 @@ export default function SettingsScreen() {
         </View>
       )}
 
+      {/* LLM 供应商管理（仅 admin） */}
+      {isSystemAdmin && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>LLM 供应商</Text>
+            <TouchableOpacity style={styles.addBtn} onPress={openAddProvider}>
+              <Text style={styles.addBtnText}>+ 新增</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.subTitle}>
+            优先级数字越小越优先；高优先级不可用时自动切换到下一个。
+          </Text>
+
+          {providers.length === 0 && (
+            <Text style={styles.userMeta}>暂无供应商，首次使用请新增</Text>
+          )}
+
+          {[...providers].sort((a, b) => a.priority - b.priority).map((p, idx, arr) => (
+            <View key={p.id} style={styles.userRow}>
+              <View style={styles.userInfo}>
+                <Text style={styles.userName}>
+                  {p.name} {!p.enabled && <Text style={{ color: '#888' }}>（已禁用）</Text>}
+                </Text>
+                <Text style={styles.userMeta}>
+                  优先级 {p.priority} · {p.base_url}
+                </Text>
+                <Text style={styles.userMeta}>key ****{p.api_key_tail}</Text>
+              </View>
+              <View style={styles.userActions}>
+                <TouchableOpacity
+                  style={[styles.resetBtn, idx === 0 && styles.btnDisabled]}
+                  onPress={() => idx > 0 && movePriority(p, -1)}
+                  disabled={idx === 0}
+                >
+                  <Text style={styles.resetBtnText}>↑</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.resetBtn, idx === arr.length - 1 && styles.btnDisabled]}
+                  onPress={() => idx < arr.length - 1 && movePriority(p, 1)}
+                  disabled={idx === arr.length - 1}
+                >
+                  <Text style={styles.resetBtnText}>↓</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.resetBtn}
+                  onPress={() => openEditProvider(p)}
+                >
+                  <Text style={styles.resetBtnText}>编辑</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.removeBtn}
+                  onPress={() => handleDeleteProvider(p)}
+                >
+                  <Text style={styles.removeBtnText}>删除</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
       <View style={{ height: 40 }} />
 
       {/* 修改密码弹窗 */}
@@ -512,6 +671,78 @@ export default function SettingsScreen() {
                 onPress={handleRenameServer}
               >
                 <Text style={styles.buttonText}>确定</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 供应商编辑弹窗 */}
+      <Modal
+        visible={showProviderModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowProviderModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {editingProvider ? '编辑供应商' : '新增 LLM 供应商'}
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="名称（如 primary / backup）"
+              placeholderTextColor="#888"
+              value={pName}
+              onChangeText={setPName}
+              autoCapitalize="none"
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Base URL（如 https://api.anthropic.com）"
+              placeholderTextColor="#888"
+              value={pBaseUrl}
+              onChangeText={setPBaseUrl}
+              autoCapitalize="none"
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder={editingProvider ? 'API Key（留空=保留原 key）' : 'API Key'}
+              placeholderTextColor="#888"
+              value={pApiKey}
+              onChangeText={setPApiKey}
+              autoCapitalize="none"
+              secureTextEntry
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="优先级（数字越小越优先）"
+              placeholderTextColor="#888"
+              value={pPriority}
+              onChangeText={setPPriority}
+              keyboardType="number-pad"
+            />
+            <View style={[styles.infoRow, { borderBottomWidth: 0, paddingVertical: 4 }]}>
+              <Text style={styles.infoLabel}>启用</Text>
+              <Switch
+                value={pEnabled}
+                onValueChange={setPEnabled}
+                trackColor={{ false: '#555', true: '#007AFF' }}
+                thumbColor="#fff"
+              />
+            </View>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setShowProviderModal(false)}
+              >
+                <Text style={styles.buttonText}>取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={submitProvider}
+              >
+                <Text style={styles.buttonText}>{editingProvider ? '保存' : '创建'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -671,6 +902,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 6,
+  },
+  btnDisabled: {
+    opacity: 0.35,
   },
   resetBtnText: {
     color: '#fff',

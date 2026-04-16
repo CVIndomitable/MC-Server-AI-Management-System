@@ -346,6 +346,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     const result = await apiService.sendChatMessage(content, serverId, queryOnlyMode, modelTier);
 
     if (result.success && result.data) {
+      if (result.data.degraded && result.data.degraded_message) {
+        const noticeMessage: ChatMessage = {
+          id: generateId(),
+          role: 'assistant',
+          content: `[提示] ${result.data.degraded_message}`,
+          timestamp: Date.now(),
+        };
+        addChatMessage(noticeMessage);
+      }
       const aiMessage: ChatMessage = {
         id: generateId(),
         role: 'assistant',

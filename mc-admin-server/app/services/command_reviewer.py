@@ -193,7 +193,8 @@ AI生成的命令：{command}
 仅回复JSON，不要其他内容。"""
 
         try:
-            response = await self.ai_client.messages.create(
+            from app.services.ai_client import provider_pool
+            response, _provider, _degraded = await provider_pool.call_with_failover(
                 model=self._get_flash_model(),
                 max_tokens=200,
                 messages=[{"role": "user", "content": prompt}],

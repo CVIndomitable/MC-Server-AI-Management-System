@@ -62,6 +62,18 @@ class UserDatabase:
                     FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE
                 )
             """)
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS api_providers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL,
+                    base_url TEXT NOT NULL,
+                    api_key TEXT NOT NULL,
+                    priority INTEGER NOT NULL DEFAULT 100,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            """)
             await db.commit()
         logger.info(f"数据库已初始化: {self.db_path}")
 
@@ -366,6 +378,94 @@ class UserDatabase:
             ) as cursor:
                 row = await cursor.fetchone()
                 return dict(row) if row else None
+
+    # ===================== LLM API 供应商 =====================
+
+    async def list_providers(self, only_enabled: bool = False) -> list[dict]:
+        """列出所有 API 供应商，按 priority 升序（数字小=优先级高）"""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            sql = "SELECT * FROM api_providers"
+            if only_enabled:
+                sql += " WHERE enabled = 1"
+            sql += " ORDER BY priority ASC, id ASC"
+            async with db.execute(sql) as cursor:
+                rows = await cursor.fetchall()
+                return [dict(row) for row in rows]
+
+    async def get_provider(self, provider_id: int) -> dict | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("SELECT * FROM api_providers WHERE id = ?", (provider_id,)) as cursor:
+                row = await cursor.fetchone()
+                return dict(row) if row else None
+
+    async def create_provider(
+        self, name: str, base_url: str, api_key: str,
+        priority: int = 100, enabled: bool = True,
+    ) -> dict | None:
+        """创建 API 供应商；name 重复返回 None"""
+        now = datetime.now(timezone.utc).isoformat()
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                cursor = await db.execute(
+                    "INSERT INTO api_providers (name, base_url, api_key, priority, enabled, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (name, base_url, api_key, priority, 1 if enabled else 0, now, now),
+                )
+                await db.commit()
+                return await self.get_provider(cursor.lastrowid)
+        except aiosqlite.IntegrityError:
+            return None
+
+    async def update_provider(
+        self, provider_id: int,
+        name: str | None = None,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        priority: int | None = None,
+        enabled: bool | None = None,
+    ) -> dict | None:
+        """更新 API 供应商；api_key 传 None 表示不改"""
+        fields, values = [], []
+        if name is not None:
+            fields.append("name = ?"); values.append(name)
+        if base_url is not None:
+            fields.append("base_url = ?"); values.append(base_url)
+        if api_key is not None:
+            fields.append("api_key = ?"); values.append(api_key)
+        if priority is not None:
+            fields.append("priority = ?"); values.append(priority)
+        if enabled is not None:
+            fields.append("enabled = ?"); values.append(1 if enabled else 0)
+        if not fields:
+            return await self.get_provider(provider_id)
+        fields.append("updated_at = ?")
+        values.append(datetime.now(timezone.utc).isoformat())
+        values.append(provider_id)
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                cursor = await db.execute(
+                    f"UPDATE api_providers SET {', '.join(fields)} WHERE id = ?", values
+                )
+                await db.commit()
+                if cursor.rowcount == 0:
+                    return None
+            return await self.get_provider(provider_id)
+        except aiosqlite.IntegrityError:
+            return None  # name 冲突
+
+    async def delete_provider(self, provider_id: int) -> bool:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("DELETE FROM api_providers WHERE id = ?", (provider_id,))
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def count_providers(self) -> int:
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute("SELECT COUNT(*) FROM api_providers") as cursor:
+                row = await cursor.fetchone()
+                return row[0] if row else 0
 
 
 user_db = UserDatabase()

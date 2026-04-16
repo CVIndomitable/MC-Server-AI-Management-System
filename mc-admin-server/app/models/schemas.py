@@ -47,6 +47,9 @@ class ChatResponse(BaseModel):
     command_executed: Optional[dict] = None
     review: Optional[ReviewInfo] = None
     timestamp: datetime
+    # 供应商降级提示：主供应商不可用、已切换到低优先级时为 True
+    degraded: bool = False
+    degraded_message: Optional[str] = None
 
 class ServerStatus(BaseModel):
     server_id: str
@@ -165,3 +168,32 @@ class MemoryRollbackRequest(BaseModel):
 class MemoryConsolidationStatus(BaseModel):
     last_consolidation: Optional[datetime] = None
     pending_sessions: int  # 等待整理的超时会话数
+
+
+# LLM API 供应商管理
+class ApiProviderInfo(BaseModel):
+    id: int
+    name: str
+    base_url: str
+    api_key_tail: str  # key 的最后 4 位，用于识别（完整 key 不返回客户端）
+    priority: int
+    enabled: bool
+    created_at: str
+    updated_at: str
+
+class ApiProviderListResponse(BaseModel):
+    providers: List[ApiProviderInfo]
+
+class ApiProviderCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    base_url: str = Field(min_length=1, max_length=512)
+    api_key: str = Field(min_length=1, max_length=512)
+    priority: int = 100
+    enabled: bool = True
+
+class ApiProviderUpdateRequest(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    base_url: Optional[str] = Field(default=None, min_length=1, max_length=512)
+    api_key: Optional[str] = Field(default=None, min_length=1, max_length=512)  # 留空表示不改
+    priority: Optional[int] = None
+    enabled: Optional[bool] = None
