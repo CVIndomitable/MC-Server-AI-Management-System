@@ -25,5 +25,8 @@ mc-admin-mod/runs/
 # iOS native (expo prebuild生成，不提交)
 mc-admin-client/ios/
 
+# Xcode 构建产物
+mc-admin-ios/build/
+
 # Node
 node_modules/
