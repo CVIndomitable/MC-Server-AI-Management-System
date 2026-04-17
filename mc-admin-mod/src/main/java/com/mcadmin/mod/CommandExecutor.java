@@ -29,10 +29,21 @@ public class CommandExecutor {
 
     public CommandExecutor(MinecraftServer server) {
         this.server = server;
-        this.allowedCommands = Collections.unmodifiableSet(new HashSet<>(Config.getAllowedCommands()));
-        this.dangerousCommands = Collections.unmodifiableSet(new HashSet<>(Config.getDangerousCommands()));
+        this.allowedCommands = toLowerSet(Config.getAllowedCommands());
+        this.dangerousCommands = toLowerSet(Config.getDangerousCommands());
         LOGGER.info("Command whitelist loaded: {}", allowedCommands);
         LOGGER.info("Dangerous commands: {}", dangerousCommands);
+    }
+
+    /**
+     * MC 命令大小写不敏感，统一以小写存储，比较前也转小写
+     */
+    private static Set<String> toLowerSet(Set<String> source) {
+        Set<String> lower = new HashSet<>();
+        for (String s : source) {
+            if (s != null) lower.add(s.toLowerCase());
+        }
+        return Collections.unmodifiableSet(lower);
     }
 
     /**
@@ -40,7 +51,7 @@ public class CommandExecutor {
      * 原子替换引用，避免 clear()+addAll() 窗口期的竞态
      */
     public void updateAllowedCommands(Set<String> commands) {
-        this.allowedCommands = Collections.unmodifiableSet(new HashSet<>(commands));
+        this.allowedCommands = toLowerSet(commands);
         LOGGER.info("Command whitelist updated: {}", allowedCommands);
     }
 
@@ -116,7 +127,7 @@ public class CommandExecutor {
         }
 
         String cmd = command.startsWith("/") ? command.substring(1) : command;
-        String baseCommand = cmd.split(" ")[0];
+        String baseCommand = cmd.split(" ")[0].toLowerCase();
 
         if (!currentAllowed.contains(baseCommand)) {
             return false;
@@ -147,7 +158,7 @@ public class CommandExecutor {
         }
 
         String cmd = command.startsWith("/") ? command.substring(1) : command;
-        String baseCommand = cmd.split(" ")[0];
+        String baseCommand = cmd.split(" ")[0].toLowerCase();
         Set<String> currentDangerous = dangerousCommands;
 
         if (currentDangerous.contains(baseCommand)) {
@@ -227,7 +238,7 @@ public class CommandExecutor {
         }
 
         // 检查命令白名单，包括嵌套子命令（读取 volatile 引用的快照）
-        String baseCommand = command.split(" ")[0];
+        String baseCommand = command.split(" ")[0].toLowerCase();
         Set<String> currentAllowed = allowedCommands;
         if (!isCommandAllowed(command, currentAllowed)) {
             callback.accept(false, "Command not allowed: " + baseCommand

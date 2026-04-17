@@ -1,10 +1,12 @@
 import Foundation
 import Security
+import os.log
 
 // MARK: - Keychain封装
 
 enum KeychainService {
     private static let service = "com.mcadmin.ios"
+    private static let logger = Logger(subsystem: service, category: "Keychain")
 
     @discardableResult
     static func save(key: String, value: String) -> Bool {
@@ -26,7 +28,8 @@ enum KeychainService {
 
         let status = SecItemAdd(newItem as CFDictionary, nil)
         if status != errSecSuccess {
-            print("[Keychain] Save failed for key '\(key)': \(status)")
+            // key 可能暴露账号名（token_username 模式），使用 %{private}@ 在 Release 构建的日志中遮蔽
+            logger.error("Keychain save failed for key '\(key, privacy: .private)': \(status, privacy: .public)")
         }
         return status == errSecSuccess
     }

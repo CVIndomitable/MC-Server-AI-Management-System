@@ -2,6 +2,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from typing import Dict, Optional
 import json
 import asyncio
+import secrets
 from datetime import datetime
 from config.settings import settings
 from app.models.schemas import StatusReport, CommandResult
@@ -65,9 +66,24 @@ class ConnectionManager:
             await self.disconnect(server_id)
 
     async def connect(self, websocket: WebSocket, server_id: str, token: str):
-        if token != settings.mod_auth_token:
+        client_ip = websocket.client.host if websocket.client else "unknown"
+
+        # 常量时间比较，防时序攻击
+        if not secrets.compare_digest(token or "", settings.mod_auth_token):
+            logger.warning(f"WS 鉴权失败: server_id={server_id} ip={client_ip}")
             await websocket.close(code=1008, reason="Invalid token")
             return False
+
+        # 拒绝同一 server_id 的并发连接，防止劫持已在线的模组
+        async with self._lock:
+            if server_id in self.active_connections:
+                existing = self.active_connections[server_id]
+                existing_ip = existing.client.host if existing.client else "unknown"
+                logger.warning(
+                    f"WS 拒绝重复连接: server_id={server_id} 已被 {existing_ip} 占用，新请求来自 {client_ip}"
+                )
+                await websocket.close(code=1008, reason="server_id already connected")
+                return False
 
         await websocket.accept()
 
@@ -85,7 +101,7 @@ class ConnectionManager:
                 "last_update": datetime.now(),
                 "data": {}
             }
-        logger.info(f"Server {server_id} connected and registered")
+        logger.info(f"Server {server_id} connected from {client_ip} and registered")
         return True
 
     async def disconnect(self, server_id: str):

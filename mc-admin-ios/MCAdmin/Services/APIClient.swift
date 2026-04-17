@@ -7,7 +7,6 @@ actor APIClient {
 
     private let baseURL = "http://47.113.221.26/mc-admin"
     private let session: URLSession
-    private var token: String?
 
     private init() {
         let config = URLSessionConfiguration.default
@@ -15,9 +14,14 @@ actor APIClient {
         self.session = URLSession(configuration: config)
     }
 
-    func setToken(_ token: String?) {
-        self.token = token
+    /// 每次请求都从 Keychain 读取当前 token，避免账号切换后 APIClient 仍持有旧 token
+    /// Keychain 在 tokenKey 下存的是"当前活跃账号"的 token，登出时会被删除
+    private func currentToken() -> String? {
+        KeychainService.load(key: KeychainService.tokenKey)
     }
+
+    /// 兼容旧调用点的空操作；真正的 token 始终从 Keychain 读取
+    func setToken(_ token: String?) {}
 
     // MARK: - 通用请求
 
@@ -48,7 +52,7 @@ actor APIClient {
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        if let token {
+        if let token = currentToken() {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 

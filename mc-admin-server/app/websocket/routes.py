@@ -49,10 +49,12 @@ async def mod_websocket(
         while True:
             data = await websocket.receive_text()
 
-            # 消息大小限制
+            # 消息大小限制：直接关闭连接，避免被恶意客户端持续发送大包耗资源
             if len(data) > _MAX_WS_MESSAGE_SIZE:
-                logger.warning(f"WebSocket消息过大 ({len(data)} bytes) from {server_id}")
-                continue
+                logger.warning(f"WebSocket消息过大 ({len(data)} bytes) from {server_id}，关闭连接")
+                await websocket.close(code=1009, reason="Message too big")
+                await manager.disconnect(server_id)
+                return
 
             # JSON解析
             try:

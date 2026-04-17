@@ -13,6 +13,21 @@ from app.services.ai_client import provider_pool
 
 logger = logging.getLogger(__name__)
 
+# 针对 (admin_id, server_id) 的整理锁，防止并发整理时 pinned 条目被覆盖
+_consolidation_locks: dict[tuple, asyncio.Lock] = {}
+_locks_guard = asyncio.Lock()
+
+
+async def _get_session_lock(admin_id: str, server_id: str) -> asyncio.Lock:
+    key = (admin_id, server_id)
+    async with _locks_guard:
+        lock = _consolidation_locks.get(key)
+        if lock is None:
+            lock = asyncio.Lock()
+            _consolidation_locks[key] = lock
+        return lock
+
+
 # 生成标签说明文本
 _TAG_DESCRIPTIONS = "\n".join(
     f"  - `{tag}`: {info['label']}" for tag, info in MEMORY_TAGS.items()
@@ -133,6 +148,12 @@ async def consolidate_session(admin_id: str, server_id: str, conversation_histor
         logger.info(f"会话 {admin_id}:{server_id} 无对话记录，跳过整理")
         return
 
+    lock = await _get_session_lock(admin_id, server_id)
+    async with lock:
+        await _consolidate_session_locked(admin_id, server_id, conversation_history)
+
+
+async def _consolidate_session_locked(admin_id: str, server_id: str, conversation_history: list):
     # 读取当前三级记忆（完整结构化数据）
     global_data = await memory_service.get_memory_with_meta("global") or {}
     admin_data = await memory_service.get_memory_with_meta("admin", admin_id) or {}

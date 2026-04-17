@@ -85,14 +85,29 @@ class UserDatabase:
         logger.info(f"数据库已初始化: {self.db_path}")
 
     async def ensure_default_admin(self):
-        """首次启动时创建默认管理员账号（使用随机密码）"""
+        """首次启动时创建默认管理员账号（使用随机密码）。
+        密码仅写入数据目录下的 initial_admin_password.txt（权限 600），
+        不进日志，避免被聚合/备份系统泄露。
+        """
         admin = await self.get_user("admin")
         if not admin:
             import secrets
             default_password = secrets.token_urlsafe(16)
             await self.create_user("admin", default_password, role="admin")
-            logger.warning(f"已创建默认管理员账号 admin，初始密码: {default_password}")
-            logger.warning("请立即登录并修改密码！此密码仅在日志中出现一次。")
+            pwd_file = os.path.join(os.path.dirname(self.db_path), "initial_admin_password.txt")
+            try:
+                # 先创建空文件再 chmod，避免密码以默认 umask 短暂可读
+                fd = os.open(pwd_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                with os.fdopen(fd, "w") as f:
+                    f.write(default_password + "\n")
+                logger.warning(
+                    f"已创建默认管理员 admin；初始密码已写入 {pwd_file} (权限 600)。"
+                    "请尽快登录修改密码，并删除该文件。"
+                )
+            except OSError as e:
+                # 写文件失败 → 只能一次性打日志，否则管理员拿不到密码
+                logger.error(f"无法写入初始密码文件 ({e})，回退到一次性日志输出")
+                logger.warning(f"初始管理员密码: {default_password}  <-- 仅此一次")
 
     async def create_user(self, username: str, password: str, role: str = "user") -> dict | None:
         """创建用户，返回用户信息；用户名重复返回 None"""

@@ -143,47 +143,8 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
             degraded_message=degraded_message,
         )
 
-    # ======== 缓存命中快速通道：跳过审核直接执行 ========
-    if ai_response.get("cache_hit"):
-        logger.info(f"[{request.server_id}] 缓存命中，跳过命令审核直接执行")
-        executed_commands = []
-        for tool_call in tool_calls:
-            tool_name = tool_call["name"]
-            tool_input = tool_call["input"]
-            try:
-                result = await _execute_tool(
-                    request.server_id, tool_name, tool_input, current_status
-                )
-                executed_commands.append({
-                    "tool": tool_name, "input": tool_input, "result": result,
-                })
-                ai_agent.add_tool_result(
-                    admin_id, request.server_id, tool_call["id"], result.get("output", "")
-                )
-            except Exception as e:
-                logger.error(f"缓存命令执行失败 {tool_name}: {e}")
-                error_result = {"success": False, "output": f"执行失败: {str(e)}"}
-                executed_commands.append({
-                    "tool": tool_name, "input": tool_input, "result": error_result,
-                })
-                ai_agent.add_tool_result(
-                    admin_id, request.server_id, tool_call["id"], error_result["output"]
-                )
-        summary = await ai_agent.continue_after_tools(
-            admin_id=admin_id,
-            server_id=request.server_id,
-            user_message=request.message,
-            query_only=request.query_only,
-            model_tier=request.model_tier,
-        )
-        final_text = summary.get("text") or ai_response.get("text", "") or "（已执行，但AI未返回描述）"
-        return ChatResponse(
-            message=final_text,
-            command_executed=executed_commands[0] if executed_commands else None,
-            timestamp=datetime.now(),
-            degraded=degraded or bool(summary.get("degraded")),
-            degraded_message=degraded_message,
-        )
+    # 缓存命中标志（走同一审核流程，只是跳过了 LLM 调用本身）
+    cache_hit = bool(ai_response.get("cache_hit"))
 
     # ======== 命令审核流程 ========
     # 对所有工具调用逐个审核
@@ -310,15 +271,19 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
             )
 
     if executed_commands:
-        summary = await ai_agent.continue_after_tools(
-            admin_id=admin_id,
-            server_id=request.server_id,
-            user_message=request.message,
-            query_only=request.query_only,
-            model_tier=request.model_tier,
-        )
-        final_text = summary.get("text") or ai_response.get("text", "") or "（已执行，但AI未返回描述）"
-        degraded = degraded or bool(summary.get("degraded"))
+        # 缓存命中时跳过二次 LLM 调用，直接复用 cache 中的文本；只有首次走 LLM 时才 summary
+        if cache_hit:
+            final_text = ai_response.get("text", "") or "（已执行，但AI未返回描述）"
+        else:
+            summary = await ai_agent.continue_after_tools(
+                admin_id=admin_id,
+                server_id=request.server_id,
+                user_message=request.message,
+                query_only=request.query_only,
+                model_tier=request.model_tier,
+            )
+            final_text = summary.get("text") or ai_response.get("text", "") or "（已执行，但AI未返回描述）"
+            degraded = degraded or bool(summary.get("degraded"))
     else:
         final_text = ai_response.get("text", "")
 

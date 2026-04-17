@@ -12,22 +12,30 @@ import org.slf4j.LoggerFactory;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class StatusReporter {
     private static final Logger LOGGER = LoggerFactory.getLogger(StatusReporter.class);
     private static final int MAX_ERRORS = 50;
 
     private final MinecraftServer server;
-    private final Timer timer;
+    private final ScheduledExecutorService scheduler;
     private final List<String> recentErrors;
     private final long reportInterval;
     private final long startTime;
+    // 防重入：上一次状态采集若仍在主线程排队未执行，跳过本轮避免堆积
+    private final AtomicBoolean reportInFlight = new AtomicBoolean(false);
 
     public StatusReporter(MinecraftServer server) {
         this.server = server;
-        this.timer = new Timer("MCAdmin-StatusReporter", true);
+        this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "MCAdmin-StatusReporter");
+            t.setDaemon(true);
+            return t;
+        });
         this.recentErrors = new ArrayList<>();
         this.reportInterval = Config.getReportInterval();
         this.startTime = System.currentTimeMillis();
@@ -35,17 +43,22 @@ public class StatusReporter {
     }
 
     private void startReporting() {
-        // 初始延迟 = reportInterval，避免 WebSocketManager 尚未初始化时的无效调用
-        timer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                reportStatus();
-            }
-        }, reportInterval, reportInterval);
+        // scheduleWithFixedDelay：确保每次任务执行完成后再等待间隔，避免任务堆积
+        scheduler.scheduleWithFixedDelay(
+            this::reportStatus,
+            reportInterval,
+            reportInterval,
+            TimeUnit.MILLISECONDS
+        );
         LOGGER.info("Status reporter started with interval {}ms", reportInterval);
     }
 
     private void reportStatus() {
+        // 若上一轮状态采集还在主线程排队，跳过本轮避免堆积（主线程卡顿时尤其重要）
+        if (!reportInFlight.compareAndSet(false, true)) {
+            LOGGER.debug("Previous status report still in flight, skipping this tick");
+            return;
+        }
         try {
             // 在服务器主线程收集数据，避免跨线程读取 MC 对象导致并发问题
             server.execute(() -> {
@@ -64,9 +77,12 @@ public class StatusReporter {
                     }
                 } catch (Exception e) {
                     LOGGER.error("Failed to collect/send status", e);
+                } finally {
+                    reportInFlight.set(false);
                 }
             });
         } catch (Exception e) {
+            reportInFlight.set(false);
             LOGGER.error("Failed to schedule status report", e);
         }
     }
@@ -283,7 +299,12 @@ public class StatusReporter {
     }
 
     public void stop() {
-        timer.cancel();
+        scheduler.shutdownNow();
+        try {
+            scheduler.awaitTermination(2, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
         LOGGER.info("Status reporter stopped");
     }
 }

@@ -7,6 +7,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.*;
 
 public class Config {
@@ -31,10 +35,34 @@ public class Config {
         try (FileInputStream fis = new FileInputStream(CONFIG_FILE)) {
             props.load(fis);
             LOGGER.info("Config loaded from {}", CONFIG_FILE);
+            // 加载后也收紧权限，防止历史文件遗留宽松权限
+            restrictPermissions(new File(CONFIG_FILE));
         } catch (IOException e) {
             LOGGER.warn("Config file not found, using defaults");
             setDefaults();
             saveConfig();
+        }
+    }
+
+    /**
+     * 将配置文件权限收紧为仅属主可读写（POSIX：0600；Windows 回退到 File API）。
+     * 配置中含 ws.token 明文，必须防止同机其他用户读取。
+     */
+    private static void restrictPermissions(File file) {
+        if (!file.exists()) return;
+        Path path = file.toPath();
+        try {
+            Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rw-------");
+            Files.setPosixFilePermissions(path, perms);
+        } catch (UnsupportedOperationException | IOException e) {
+            // 非 POSIX 文件系统（如 Windows NTFS），尽力而为
+            boolean ok = file.setReadable(false, false)
+                      && file.setReadable(true, true)
+                      && file.setWritable(false, false)
+                      && file.setWritable(true, true);
+            if (!ok) {
+                LOGGER.warn("Could not restrict config file permissions: {}", file.getAbsolutePath());
+            }
         }
     }
 
@@ -75,6 +103,7 @@ public class Config {
         } catch (IOException e) {
             LOGGER.error("Failed to save config: {}", e.getMessage());
         }
+        restrictPermissions(configFile);
     }
 
     public static String getWsUrl() {

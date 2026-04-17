@@ -49,10 +49,7 @@ struct MarkdownText: View {
 
     private func inlineMarkdownText(_ content: String) -> some View {
         Group {
-            if let attributed = try? AttributedString(
-                markdown: content,
-                options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-            ) {
+            if let attributed = parseSanitizedMarkdown(content) {
                 Text(attributed)
                     .font(.body)
                     .foregroundStyle(Theme.textPrimary)
@@ -63,6 +60,25 @@ struct MarkdownText: View {
                     .foregroundStyle(Theme.textPrimary)
             }
         }
+    }
+
+    /// 解析 markdown 并清洗链接：只保留 http/https 方案，其他（javascript:/file:/data: 等）剥离。
+    private func parseSanitizedMarkdown(_ content: String) -> AttributedString? {
+        guard var attributed = try? AttributedString(
+            markdown: content,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        ) else {
+            return nil
+        }
+        let allowedSchemes: Set<String> = ["http", "https"]
+        for run in attributed.runs {
+            guard let url = run.link else { continue }
+            let scheme = url.scheme?.lowercased() ?? ""
+            if !allowedSchemes.contains(scheme) {
+                attributed[run.range].link = nil
+            }
+        }
+        return attributed
     }
 
     // MARK: - 解析块级元素
