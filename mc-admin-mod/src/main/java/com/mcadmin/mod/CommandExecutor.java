@@ -16,6 +16,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 
@@ -23,12 +24,14 @@ public class CommandExecutor {
     private static final Logger LOGGER = LoggerFactory.getLogger(CommandExecutor.class);
 
     private final MinecraftServer server;
+    private final LogReader logReader;
     // 使用 volatile + 原子替换引用，保证跨线程读写安全
     private volatile Set<String> allowedCommands;
     private volatile Set<String> dangerousCommands;
 
     public CommandExecutor(MinecraftServer server) {
         this.server = server;
+        this.logReader = new LogReader(server);
         this.allowedCommands = toLowerSet(Config.getAllowedCommands());
         this.dangerousCommands = toLowerSet(Config.getDangerousCommands());
         LOGGER.info("Command whitelist loaded: {}", allowedCommands);
@@ -84,6 +87,19 @@ public class CommandExecutor {
     }
 
     public void executeCommand(String commandId, String action, JsonObject payload, BiConsumer<Boolean, String> callback) {
+        // read_log 是纯文件 I/O，放在独立线程池执行，不阻塞服务器主线程
+        if ("read_log".equals(action)) {
+            CompletableFuture.runAsync(() -> {
+                try {
+                    logReader.readLatest(payload, callback);
+                } catch (Exception e) {
+                    LOGGER.error("Log read failed", e);
+                    callback.accept(false, "Error: " + e.getMessage());
+                }
+            });
+            return;
+        }
+
         // 在服务器主线程执行
         server.execute(() -> {
             try {

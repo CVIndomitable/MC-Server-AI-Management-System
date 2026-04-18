@@ -77,6 +77,16 @@ async def _execute_tool(server_id: str, tool_name: str, tool_input: dict, curren
         return {"success": True, "output": str(current_status)}
     if tool_name == "restart_server":
         return await manager.send_command(server_id, "restart", {})
+    if tool_name == "read_log":
+        payload: dict = {}
+        lines = tool_input.get("lines")
+        if isinstance(lines, int):
+            payload["lines"] = lines
+        keyword = tool_input.get("keyword")
+        if isinstance(keyword, str) and keyword.strip():
+            payload["keyword"] = keyword.strip()[:100]
+        # 读日志要扫全文件，给个更宽裕的超时
+        return await manager.send_command(server_id, "read_log", payload, timeout=15)
     mc_cmd = _tool_to_mc_command(tool_name, tool_input)
     if mc_cmd is not None:
         return await manager.send_command(server_id, "execute", {"command": mc_cmd})

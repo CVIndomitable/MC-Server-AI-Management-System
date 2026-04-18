@@ -32,6 +32,7 @@ COMMAND_RISK_MAP: dict[str, RiskLevel] = {
 # 特殊工具（非原始命令）的风险等级
 TOOL_RISK_MAP: dict[str, RiskLevel | None] = {
     "get_status":      RiskLevel.LOW,
+    "read_log":        RiskLevel.LOW,
     "broadcast":       RiskLevel.LOW,
     "execute_command":  None,      # 取决于具体命令，需解析
     "kick_player":     RiskLevel.MEDIUM,
