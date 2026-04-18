@@ -44,6 +44,9 @@ runs {
         systemProperty 'forge.logging.console.level', 'debug'
         programArgument '--nogui'
     }
+    client {
+        systemProperty 'forge.logging.console.level', 'debug'
+    }
 }
 
 // 替换资源文件中的 ${} 变量

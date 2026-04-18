@@ -1,9 +1,12 @@
 package com.mcadmin.mod;
 
+import com.mcadmin.mod.ai.AiChatBridge;
+import com.mcadmin.mod.commands.AiCommand;
+import com.mcadmin.mod.events.ChatInterceptor;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.event.lifecycle.FMLDedicatedServerSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import org.slf4j.Logger;
@@ -19,22 +22,27 @@ public class MCAdminMod {
     private StatusReporter statusReporter;
     private CommandExecutor commandExecutor;
     private LogCollector logCollector;
+    private AiChatBridge aiChatBridge;
+    private ChatInterceptor chatInterceptor;
 
     public MCAdminMod(IEventBus modEventBus) {
         instance = this;
 
-        modEventBus.addListener(this::onServerSetup);
         NeoForge.EVENT_BUS.addListener(this::onServerStarted);
         NeoForge.EVENT_BUS.addListener(this::onServerStopping);
+        NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
 
         LOGGER.info("MC Admin Mod initialized");
     }
 
-    private void onServerSetup(FMLDedicatedServerSetupEvent event) {
-        LOGGER.info("MC Admin Mod server setup");
-    }
-
     private void onServerStarted(ServerStartedEvent event) {
+        // 仅在专用服务器（dedicated server）上启用服务端组件；
+        // 否则装了模组的客户端进入单人世界时也会尝试连后端 WebSocket
+        if (!event.getServer().isDedicatedServer()) {
+            LOGGER.info("Integrated server detected, skipping MC Admin server components");
+            return;
+        }
+
         LOGGER.info("Server started, initializing MC Admin components");
 
         // 初始化指令执行器
@@ -49,6 +57,13 @@ public class MCAdminMod {
 
         // 初始化 WebSocket 管理器
         wsManager = new WebSocketManager(commandExecutor, statusReporter);
+
+        // AI 对话桥接 + 聊天拦截
+        aiChatBridge = new AiChatBridge(event.getServer(), wsManager);
+        wsManager.setAiChatBridge(aiChatBridge);
+        chatInterceptor = new ChatInterceptor(aiChatBridge);
+        NeoForge.EVENT_BUS.register(chatInterceptor);
+
         wsManager.connect();
 
         LOGGER.info("MC Admin Mod fully initialized");
@@ -56,6 +71,16 @@ public class MCAdminMod {
 
     private void onServerStopping(ServerStoppingEvent event) {
         LOGGER.info("Server stopping, cleaning up MC Admin components");
+
+        if (chatInterceptor != null) {
+            try {
+                NeoForge.EVENT_BUS.unregister(chatInterceptor);
+            } catch (Exception ignored) {}
+        }
+
+        if (aiChatBridge != null) {
+            aiChatBridge.stop();
+        }
 
         if (logCollector != null) {
             logCollector.unregister();
@@ -68,6 +93,10 @@ public class MCAdminMod {
         if (statusReporter != null) {
             statusReporter.stop();
         }
+    }
+
+    private void onRegisterCommands(RegisterCommandsEvent event) {
+        AiCommand.register(event.getDispatcher());
     }
 
     public static MCAdminMod getInstance() {

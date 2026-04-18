@@ -16,7 +16,7 @@ _VALID_SERVER_ID = re.compile(r'^[a-zA-Z0-9_\-]{1,64}$')
 _MAX_WS_MESSAGE_SIZE = 100 * 1024
 
 # 合法的消息类型
-_VALID_MESSAGE_TYPES = {"status", "result"}
+_VALID_MESSAGE_TYPES = {"status", "result", "ai_chat_request", "confirm_required", "ping"}
 
 
 @router.websocket("/ws/mod")

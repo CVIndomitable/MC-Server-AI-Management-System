@@ -130,6 +130,25 @@ class ConnectionManager:
                 if not future.done():
                     future.set_result(message)
 
+        elif msg_type == "ai_chat_request":
+            # 游戏内玩家通过模组发起的 AI 对话
+            from app.services.mod_chat_bridge import handle_ai_chat_request
+            asyncio.create_task(handle_ai_chat_request(server_id, message))
+
+    async def send_raw(self, server_id: str, message: dict) -> bool:
+        """直接向指定服务器发送任意 JSON 消息（不期待响应）"""
+        async with self._lock:
+            ws = self.active_connections.get(server_id)
+        if ws is None:
+            logger.warning(f"send_raw: server {server_id} 未连接")
+            return False
+        try:
+            await ws.send_text(json.dumps(message))
+            return True
+        except Exception as e:
+            logger.error(f"send_raw 发送失败 server={server_id}: {e}")
+            return False
+
     async def send_command(self, server_id: str, action: str, payload: dict, timeout: int = 30) -> dict:
         async with self._lock:
             if server_id not in self.active_connections:

@@ -25,6 +25,7 @@ public class WebSocketManager {
     private volatile WebSocket webSocket;
     private final CommandExecutor commandExecutor;
     private final StatusReporter statusReporter;
+    private volatile com.mcadmin.mod.ai.AiChatBridge aiChatBridge;
     private final AtomicBoolean shouldReconnect = new AtomicBoolean(true);
     private final AtomicBoolean connected = new AtomicBoolean(false);
     private final HttpClient httpClient;
@@ -48,6 +49,10 @@ public class WebSocketManager {
         this.commandExecutor = commandExecutor;
         this.statusReporter = statusReporter;
         this.httpClient = HttpClient.newHttpClient();
+    }
+
+    public void setAiChatBridge(com.mcadmin.mod.ai.AiChatBridge bridge) {
+        this.aiChatBridge = bridge;
     }
 
     public void connect() {
@@ -140,6 +145,11 @@ public class WebSocketManager {
                     break;
                 case "update_whitelist":
                     handleWhitelistUpdate(json);
+                    break;
+                case "ai_chat_response":
+                    if (aiChatBridge != null) {
+                        aiChatBridge.handleResponse(json);
+                    }
                     break;
                 case "auth_response":
                     LOGGER.debug("Received auth_response");

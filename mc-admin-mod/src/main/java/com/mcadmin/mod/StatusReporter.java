@@ -2,10 +2,12 @@ package com.mcadmin.mod;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.mcadmin.mod.network.TpsPayload;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.storage.ServerLevelData;
+import net.neoforged.neoforge.network.PacketDistributor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,6 +31,10 @@ public class StatusReporter {
     // 防重入：上一次状态采集若仍在主线程排队未执行，跳过本轮避免堆积
     private final AtomicBoolean reportInFlight = new AtomicBoolean(false);
 
+    // 最近一次采集到的 TPS/MSPT，用于推送给装了模组的客户端 HUD
+    private volatile float lastTps = 20.0f;
+    private volatile float lastMspt = 0.0f;
+
     public StatusReporter(MinecraftServer server) {
         this.server = server;
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -50,7 +56,37 @@ public class StatusReporter {
             reportInterval,
             TimeUnit.MILLISECONDS
         );
+        // 每秒把最新 TPS/MSPT 推送给装了模组的客户端（HUD 实时刷新）
+        scheduler.scheduleWithFixedDelay(
+            this::broadcastTpsToClients,
+            1000L, 1000L, TimeUnit.MILLISECONDS
+        );
         LOGGER.info("Status reporter started with interval {}ms", reportInterval);
+    }
+
+    /**
+     * 把最近一次采集的 TPS/MSPT 推送给所有在线玩家。
+     * payload 注册为 optional()，没装模组的原版客户端会被 NeoForge 忽略。
+     */
+    private void broadcastTpsToClients() {
+        if (server.getPlayerList().getPlayerCount() == 0) return;
+        server.execute(() -> {
+            try {
+                refreshLatestTps();
+                float tps = lastTps;
+                float mspt = lastMspt;
+                for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                    try {
+                        PacketDistributor.sendToPlayer(player, new TpsPayload(tps, mspt));
+                    } catch (Exception e) {
+                        // 原版客户端未注册该 payload 会抛异常，忽略即可
+                        LOGGER.debug("Skip TPS payload to {}: {}", player.getName().getString(), e.getMessage());
+                    }
+                }
+            } catch (Exception e) {
+                LOGGER.debug("broadcastTpsToClients failed: {}", e.getMessage());
+            }
+        });
     }
 
     private void reportStatus() {
@@ -121,6 +157,32 @@ public class StatusReporter {
     private java.lang.reflect.Field tickTimesField;
     private boolean tickTimesFieldResolved = false;
 
+    /**
+     * 只刷新 lastTps/lastMspt，不写入 JSON（用于 HUD 广播的轻量采样）
+     */
+    private void refreshLatestTps() {
+        try {
+            if (!tickTimesFieldResolved) {
+                tickTimesFieldResolved = true;
+                tickTimesField = resolveTickTimesField();
+            }
+            if (tickTimesField != null) {
+                long[] arr = (long[]) tickTimesField.get(server);
+                if (arr != null) {
+                    long sum = 0;
+                    for (long t : arr) sum += t;
+                    double avgNanos = sum / (double) arr.length;
+                    if (avgNanos > 0 && avgNanos < 10_000_000_000L) {
+                        double avgMs = avgNanos / 1_000_000.0;
+                        double tps = Math.min(20.0, 1000.0 / Math.max(avgMs, 50.0));
+                        lastTps = (float) (Math.round(tps * 10.0) / 10.0);
+                        lastMspt = (float) (Math.round(avgMs * 10.0) / 10.0);
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
     private void collectTps(JsonObject data) {
         try {
             if (!tickTimesFieldResolved) {
@@ -138,8 +200,12 @@ public class StatusReporter {
                     if (avgNanos > 0 && avgNanos < 10_000_000_000L) {
                         double avgMs = avgNanos / 1_000_000.0;
                         double tps = Math.min(20.0, 1000.0 / Math.max(avgMs, 50.0));
-                        data.addProperty("tps", Math.round(tps * 10.0) / 10.0);
-                        data.addProperty("mspt", Math.round(avgMs * 10.0) / 10.0);
+                        double roundedTps = Math.round(tps * 10.0) / 10.0;
+                        double roundedMspt = Math.round(avgMs * 10.0) / 10.0;
+                        data.addProperty("tps", roundedTps);
+                        data.addProperty("mspt", roundedMspt);
+                        lastTps = (float) roundedTps;
+                        lastMspt = (float) roundedMspt;
                         return;
                     }
                 }

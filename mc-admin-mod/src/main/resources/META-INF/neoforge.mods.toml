@@ -14,11 +14,11 @@ authors="MCAdmin Team"
     type="required"
     versionRange="${neo_version_range}"
     ordering="NONE"
-    side="SERVER"
+    side="BOTH"
 
 [[dependencies.mcadmin]]
     modId="minecraft"
     type="required"
     versionRange="${minecraft_version_range}"
     ordering="NONE"
-    side="SERVER"
+    side="BOTH"
