@@ -118,19 +118,23 @@ async def _summarize_spark_report(
         f"[系统附加·Spark 异步报告]\n"
         f"先前发起的命令：{caller_hint or '/spark profiler start ...'}\n"
         f"采样已完成，报告链接：{url}\n"
-        f"原文片段：{raw_text[:800]}\n"
-        f"请基于这份报告给管理员一段中文简述（不超过 3 句，附上链接）。不要调用工具。"
+        f"原文片段：{raw_text[:800]}\n\n"
+        f"请作为服务器性能分析师撰写中文分析报告。先告知管理员采样已完成并给出链接，"
+        f"再结合先前对话里的服务器状态/历史，就这次采样给出结构化诊断："
+        f"可能的瓶颈来源（TPS/MSPT 异常点、热点包名、GC、区块生成、实体/红石、模组嫌疑等），"
+        f"以及 2-4 条可执行的优化动作。允许分点、允许较长。不要调用工具。"
     )
     history.append({"role": "user", "content": async_message})
     ai_agent._trim_history(hkey)
 
     try:
+        # Spark 报告分析含金量高，强制用 pro 档模型
         summary = await ai_agent.continue_after_tools(
             admin_id=admin_id,
             server_id=server_id,
             user_message=async_message,
             query_only=False,
-            model_tier=None,
+            model_tier="pro",
         )
         text = (summary or {}).get("text", "").strip()
         if text:
