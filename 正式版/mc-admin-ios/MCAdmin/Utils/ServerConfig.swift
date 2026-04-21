@@ -19,17 +19,17 @@ enum ServerConfig {
         return fallbackBaseURL
     }
 
-    /// 对应的 WebSocket 根，自动把 http/https 前缀替换为 ws/wss
+    /// 客户端订阅 WS 端点（/ws/client），后端把 Spark 报告等异步事件主动推到这里
     static var webSocketURL: String {
         let base = baseURL
         if base.hasPrefix("https://") {
-            return "wss://" + base.dropFirst("https://".count) + "/ws"
+            return "wss://" + base.dropFirst("https://".count) + "/ws/client"
         }
         if base.hasPrefix("http://") {
-            return "ws://" + base.dropFirst("http://".count) + "/ws"
+            return "ws://" + base.dropFirst("http://".count) + "/ws/client"
         }
         // 未知协议：按 wss 处理，明文出站视为故障
-        return "wss://" + base + "/ws"
+        return "wss://" + base + "/ws/client"
     }
 
     static func overrideBaseURL(_ value: String?) {

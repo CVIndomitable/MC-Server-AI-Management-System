@@ -102,6 +102,18 @@ async def handle_ai_chat_request(server_id: str, message: dict):
                 result = await _execute_tool(server_id, tn, ti, current_status)
                 ai_agent.add_tool_result(admin_id, server_id, tc_id, result.get("output", ""))
                 executed_any = True
+                if result.get("success"):
+                    try:
+                        from app.api.chat import _maybe_register_async_caller
+                        await _maybe_register_async_caller(
+                            admin_id=admin_id,
+                            server_id=server_id,
+                            tool_name=tn,
+                            tool_input=ti,
+                            command=command,
+                        )
+                    except Exception as e:
+                        logger.warning(f"mod_chat 登记异步调用者失败: {e}")
             except Exception as e:
                 logger.error(f"mod_chat 工具执行失败: {e}")
                 ai_agent.add_tool_result(admin_id, server_id, tc_id, f"执行失败: {e}")

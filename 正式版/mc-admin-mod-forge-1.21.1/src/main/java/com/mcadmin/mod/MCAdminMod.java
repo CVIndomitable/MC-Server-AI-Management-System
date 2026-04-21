@@ -24,6 +24,7 @@ public class MCAdminMod {
     private LogCollector logCollector;
     private AiChatBridge aiChatBridge;
     private ChatInterceptor chatInterceptor;
+    private SparkReportListener sparkReportListener;
 
     public MCAdminMod(IEventBus modEventBus) {
         instance = this;
@@ -64,6 +65,10 @@ public class MCAdminMod {
         chatInterceptor = new ChatInterceptor(aiChatBridge);
         NeoForge.EVENT_BUS.register(chatInterceptor);
 
+        // Spark profiler 异步报告监听（抓 me.lucko.spark 日志里的上传 URL）
+        sparkReportListener = new SparkReportListener(wsManager);
+        sparkReportListener.register();
+
         wsManager.connect();
 
         LOGGER.info("MC Admin Mod fully initialized");
@@ -80,6 +85,10 @@ public class MCAdminMod {
 
         if (aiChatBridge != null) {
             aiChatBridge.stop();
+        }
+
+        if (sparkReportListener != null) {
+            sparkReportListener.unregister();
         }
 
         if (logCollector != null) {

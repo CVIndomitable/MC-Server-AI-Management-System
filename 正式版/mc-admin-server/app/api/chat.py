@@ -4,6 +4,7 @@ from app.models.review import ReviewDecision
 from app.core.auth import verify_token
 from app.core.permissions import require_server_access
 from app.services.ai_agent import ai_agent
+from app.services.async_event_bridge import async_event_bridge
 from app.services.memory import memory_service
 from app.services.command_reviewer import command_reviewer
 from app.websocket.manager import manager
@@ -27,6 +28,28 @@ async def _check_chat_rate(user_id: str):
 
 # MC玩家名仅允许字母、数字、下划线，长度1-16
 _VALID_MC_NAME = re.compile(r'^[a-zA-Z0-9_]{1,16}$')
+
+# /spark profiler start ... （允许前导斜杠可选、空白容错）
+_SPARK_PROFILER_START = re.compile(r"^\s*/?\s*spark\s+profiler\s+start\b", re.IGNORECASE)
+
+
+async def _maybe_register_async_caller(
+    *, admin_id: str, server_id: str, tool_name: str, tool_input: dict, command: str
+):
+    """识别会产生异步结果的命令，登记调用者。
+    目前只有 /spark profiler start：Spark 后台采样 + 上传完报告，
+    通过模组 async_event → async_event_bridge 回推到发起者。
+    """
+    if tool_name != "execute_command":
+        return
+    if not isinstance(command, str) or not _SPARK_PROFILER_START.match(command):
+        return
+    try:
+        await async_event_bridge.register_profiler_caller(
+            server_id=server_id, admin_id=admin_id, hint=command
+        )
+    except Exception as e:
+        logger.warning(f"登记 profiler 调用者失败: {e}")
 
 
 def _validate_player_name(name: str) -> str:
@@ -189,6 +212,15 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
                 ai_agent.add_tool_result(
                     admin_id, request.server_id, tool_call["id"], result.get("output", "")
                 )
+                # 若本次调用是会产生异步结果的命令（profiler start 等），登记调用者
+                if result.get("success"):
+                    await _maybe_register_async_caller(
+                        admin_id=admin_id,
+                        server_id=request.server_id,
+                        tool_name=tool_name,
+                        tool_input=tool_input,
+                        command=command,
+                    )
             except Exception as e:
                 logger.error(f"Tool execution failed for {tool_name}: {e}")
                 error_result = {"success": False, "output": f"执行失败: {str(e)}"}

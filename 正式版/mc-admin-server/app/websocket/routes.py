@@ -1,6 +1,9 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from typing import Optional
 from app.websocket.manager import manager
+from app.core.permissions import require_server_access
+from config.settings import settings
+from jose import JWTError, jwt
 import json
 import re
 import logging
@@ -15,8 +18,10 @@ _VALID_SERVER_ID = re.compile(r'^[a-zA-Z0-9_\-]{1,64}$')
 # WebSocket 单条消息最大大小（100KB）
 _MAX_WS_MESSAGE_SIZE = 100 * 1024
 
-# 合法的消息类型
-_VALID_MESSAGE_TYPES = {"status", "result", "ai_chat_request", "confirm_required", "ping"}
+# 合法的消息类型（来自模组侧）
+_VALID_MESSAGE_TYPES = {
+    "status", "result", "ai_chat_request", "confirm_required", "ping", "async_event"
+}
 
 
 @router.websocket("/ws/mod")
@@ -80,3 +85,77 @@ async def mod_websocket(
     except Exception as e:
         logger.error(f"WebSocket error for {server_id}: {e}", exc_info=True)
         await manager.disconnect(server_id)
+
+
+@router.websocket("/ws/client")
+async def client_websocket(
+    websocket: WebSocket,
+    server_id: Optional[str] = Query(None),
+    token: Optional[str] = Query(None),
+):
+    """前端订阅异步推送（Spark 采样报告、其他后台事件等）。
+    鉴权走 JWT（与 HTTP API 同源），按 (admin_id, server_id) 建立 1:1 订阅。
+    消息方向：主要是 server → client；client 偶尔发 ping 保活。
+    """
+    if not token:
+        auth_header = websocket.headers.get("authorization", "")
+        token = auth_header.removeprefix("Bearer ").strip() if auth_header else ""
+    if not server_id:
+        server_id = websocket.headers.get("x-server-id", "").strip()
+
+    if not server_id or not token:
+        await websocket.close(code=1008, reason="Missing credentials")
+        return
+
+    if not _VALID_SERVER_ID.match(server_id):
+        await websocket.close(code=1008, reason="Invalid server_id format")
+        return
+
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
+    except JWTError:
+        await websocket.close(code=1008, reason="Invalid token")
+        return
+
+    admin_id = payload.get("sub")
+    if not admin_id:
+        await websocket.close(code=1008, reason="Invalid token payload")
+        return
+
+    try:
+        await require_server_access(admin_id, server_id, min_role="admin")
+    except Exception as e:
+        logger.info(f"/ws/client 权限校验失败 admin={admin_id} server={server_id}: {e}")
+        await websocket.close(code=1008, reason="Forbidden")
+        return
+
+    await websocket.accept()
+    await manager.register_client(websocket, admin_id, server_id)
+    # 握手确认（前端已有 auth_response 分支会据此清空鉴权超时）
+    try:
+        await websocket.send_text(json.dumps({
+            "type": "auth_response",
+            "server_id": server_id,
+        }))
+    except Exception:
+        pass
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            if len(data) > _MAX_WS_MESSAGE_SIZE:
+                await websocket.close(code=1009, reason="Message too big")
+                break
+            # 客户端目前只需要 ping 保活；其余消息静默忽略
+            try:
+                msg = json.loads(data)
+                if isinstance(msg, dict) and msg.get("type") == "ping":
+                    await websocket.send_text(json.dumps({"type": "pong"}))
+            except json.JSONDecodeError:
+                continue
+    except WebSocketDisconnect:
+        logger.info(f"/ws/client disconnected admin={admin_id} server={server_id}")
+    except Exception as e:
+        logger.error(f"/ws/client error admin={admin_id} server={server_id}: {e}", exc_info=True)
+    finally:
+        await manager.unregister_client(admin_id, server_id, websocket)
