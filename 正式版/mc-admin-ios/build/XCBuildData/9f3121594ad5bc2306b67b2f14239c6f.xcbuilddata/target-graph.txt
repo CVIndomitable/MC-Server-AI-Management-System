@@ -1,0 +1,2 @@
+Target dependency graph (1 target)
+Target 'MCAdmin' in project 'MCAdmin' (no dependencies)

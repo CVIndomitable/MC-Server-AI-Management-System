@@ -1,0 +1,23 @@
+{
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/App/ContentView.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ContentView.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ContentView.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ContentView.dia",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ContentView.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ContentView.swiftdeps"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Services/KeychainService.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/KeychainService.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/KeychainService.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/KeychainService.dia",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/KeychainService.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/KeychainService.swiftdeps"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Views/LoginView.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/LoginView.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/LoginView.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/LoginView.dia",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/LoginView.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/LoginView.swiftdeps"
+  }
+}

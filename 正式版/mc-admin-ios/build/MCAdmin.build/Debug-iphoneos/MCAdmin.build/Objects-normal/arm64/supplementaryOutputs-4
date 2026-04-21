@@ -1,0 +1,23 @@
+{
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/App/MCAdminApp.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MCAdminApp.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MCAdminApp.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MCAdminApp.dia",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MCAdminApp.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MCAdminApp.swiftdeps"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Views/MainTabView.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MainTabView.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MainTabView.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MainTabView.dia",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MainTabView.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MainTabView.swiftdeps"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Views/MarkdownText.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MarkdownText.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MarkdownText.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MarkdownText.dia",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MarkdownText.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MarkdownText.swiftdeps"
+  }
+}

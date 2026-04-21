@@ -1,0 +1,209 @@
+{
+  "" : {
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MCAdmin-primary.dia",
+    "emit-module-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MCAdmin-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MCAdmin-primary-emit-module.dia",
+    "pch" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MCAdmin-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MCAdmin-primary.swiftdeps"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/App/ContentView.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ContentView.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ContentView.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ContentView.dia",
+    "index-unit-output-path" : "/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ContentView.o",
+    "llvm-bc" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ContentView.bc",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ContentView.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ContentView.swiftdeps",
+    "swiftmodule" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ContentView~partial.swiftmodule"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/App/MCAdminApp.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MCAdminApp.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MCAdminApp.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MCAdminApp.dia",
+    "index-unit-output-path" : "/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MCAdminApp.o",
+    "llvm-bc" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MCAdminApp.bc",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MCAdminApp.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MCAdminApp.swiftdeps",
+    "swiftmodule" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MCAdminApp~partial.swiftmodule"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Models/AuthModels.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AuthModels.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AuthModels.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AuthModels.dia",
+    "index-unit-output-path" : "/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AuthModels.o",
+    "llvm-bc" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AuthModels.bc",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AuthModels.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AuthModels.swiftdeps",
+    "swiftmodule" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AuthModels~partial.swiftmodule"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Models/ChatModels.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatModels.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatModels.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatModels.dia",
+    "index-unit-output-path" : "/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatModels.o",
+    "llvm-bc" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatModels.bc",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatModels.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatModels.swiftdeps",
+    "swiftmodule" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatModels~partial.swiftmodule"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Models/MemoryModels.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MemoryModels.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MemoryModels.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MemoryModels.dia",
+    "index-unit-output-path" : "/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MemoryModels.o",
+    "llvm-bc" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MemoryModels.bc",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MemoryModels.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MemoryModels.swiftdeps",
+    "swiftmodule" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MemoryModels~partial.swiftmodule"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Models/ServerModels.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ServerModels.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ServerModels.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ServerModels.dia",
+    "index-unit-output-path" : "/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ServerModels.o",
+    "llvm-bc" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ServerModels.bc",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ServerModels.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ServerModels.swiftdeps",
+    "swiftmodule" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ServerModels~partial.swiftmodule"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Services/APIClient.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/APIClient.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/APIClient.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/APIClient.dia",
+    "index-unit-output-path" : "/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/APIClient.o",
+    "llvm-bc" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/APIClient.bc",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/APIClient.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/APIClient.swiftdeps",
+    "swiftmodule" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/APIClient~partial.swiftmodule"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Services/KeychainService.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/KeychainService.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/KeychainService.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/KeychainService.dia",
+    "index-unit-output-path" : "/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/KeychainService.o",
+    "llvm-bc" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/KeychainService.bc",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/KeychainService.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/KeychainService.swiftdeps",
+    "swiftmodule" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/KeychainService~partial.swiftmodule"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Services/WebSocketManager.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/WebSocketManager.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/WebSocketManager.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/WebSocketManager.dia",
+    "index-unit-output-path" : "/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/WebSocketManager.o",
+    "llvm-bc" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/WebSocketManager.bc",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/WebSocketManager.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/WebSocketManager.swiftdeps",
+    "swiftmodule" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/WebSocketManager~partial.swiftmodule"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Utils/Theme.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/Theme.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/Theme.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/Theme.dia",
+    "index-unit-output-path" : "/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/Theme.o",
+    "llvm-bc" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/Theme.bc",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/Theme.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/Theme.swiftdeps",
+    "swiftmodule" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/Theme~partial.swiftmodule"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/ViewModels/AppState.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AppState.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AppState.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AppState.dia",
+    "index-unit-output-path" : "/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AppState.o",
+    "llvm-bc" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AppState.bc",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AppState.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AppState.swiftdeps",
+    "swiftmodule" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AppState~partial.swiftmodule"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Views/ActionsView.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ActionsView.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ActionsView.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ActionsView.dia",
+    "index-unit-output-path" : "/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ActionsView.o",
+    "llvm-bc" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ActionsView.bc",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ActionsView.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ActionsView.swiftdeps",
+    "swiftmodule" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ActionsView~partial.swiftmodule"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Views/ChatView.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatView.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatView.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatView.dia",
+    "index-unit-output-path" : "/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatView.o",
+    "llvm-bc" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatView.bc",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatView.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatView.swiftdeps",
+    "swiftmodule" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatView~partial.swiftmodule"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Views/LoginView.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/LoginView.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/LoginView.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/LoginView.dia",
+    "index-unit-output-path" : "/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/LoginView.o",
+    "llvm-bc" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/LoginView.bc",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/LoginView.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/LoginView.swiftdeps",
+    "swiftmodule" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/LoginView~partial.swiftmodule"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Views/MainTabView.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MainTabView.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MainTabView.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MainTabView.dia",
+    "index-unit-output-path" : "/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MainTabView.o",
+    "llvm-bc" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MainTabView.bc",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MainTabView.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MainTabView.swiftdeps",
+    "swiftmodule" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MainTabView~partial.swiftmodule"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Views/MarkdownText.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MarkdownText.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MarkdownText.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MarkdownText.dia",
+    "index-unit-output-path" : "/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MarkdownText.o",
+    "llvm-bc" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MarkdownText.bc",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MarkdownText.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MarkdownText.swiftdeps",
+    "swiftmodule" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/MarkdownText~partial.swiftmodule"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Views/ServerSelectView.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ServerSelectView.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ServerSelectView.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ServerSelectView.dia",
+    "index-unit-output-path" : "/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ServerSelectView.o",
+    "llvm-bc" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ServerSelectView.bc",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ServerSelectView.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ServerSelectView.swiftdeps",
+    "swiftmodule" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ServerSelectView~partial.swiftmodule"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Views/SettingsView.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/SettingsView.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/SettingsView.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/SettingsView.dia",
+    "index-unit-output-path" : "/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/SettingsView.o",
+    "llvm-bc" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/SettingsView.bc",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/SettingsView.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/SettingsView.swiftdeps",
+    "swiftmodule" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/SettingsView~partial.swiftmodule"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Views/StatusView.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/StatusView.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/StatusView.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/StatusView.dia",
+    "index-unit-output-path" : "/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/StatusView.o",
+    "llvm-bc" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/StatusView.bc",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/StatusView.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/StatusView.swiftdeps",
+    "swiftmodule" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/StatusView~partial.swiftmodule"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/GeneratedAssetSymbols.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/GeneratedAssetSymbols.dia",
+    "index-unit-output-path" : "/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftdeps",
+    "swiftmodule" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/GeneratedAssetSymbols~partial.swiftmodule"
+  }
+}
