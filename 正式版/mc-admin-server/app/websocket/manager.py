@@ -85,14 +85,30 @@ class ConnectionManager:
                 await websocket.close(code=1008, reason="server_id already connected")
                 return False
 
+        # 服务器注册策略：未知 server_id 是否允许首次连入自动入库
+        # 生产配置 mod_allow_new_servers=false 时，需要管理员预先注册才能连入
+        from app.core.database import user_db
+        try:
+            existing = await user_db.get_server(server_id)
+        except Exception as e:
+            logger.warning(f"查询服务器失败: {e}")
+            existing = None
+
+        if existing is None and not settings.mod_allow_new_servers:
+            logger.warning(
+                f"WS 拒绝未注册 server_id={server_id} (ip={client_ip})；"
+                f"需管理员先注册或启用 MOD_ALLOW_NEW_SERVERS"
+            )
+            await websocket.close(code=1008, reason="server_id not registered")
+            return False
+
         await websocket.accept()
 
-        # 自动注册服务器到数据库
+        # 记录（或刷新）服务器状态
         try:
-            from app.core.database import user_db
             await user_db.register_server(server_id)
         except Exception as e:
-            logger.warning(f"服务器自动注册失败: {e}")
+            logger.warning(f"服务器注册失败: {e}")
 
         async with self._lock:
             self.active_connections[server_id] = websocket

@@ -55,7 +55,9 @@ public class LogCollector extends AbstractAppender {
             }
             statusReporter.addError(sb.toString());
         } finally {
-            IN_APPEND.set(false);
+            // 用 remove() 而不是 set(false)：彻底释放当前线程的 ThreadLocalMap 槽位，
+            // 避免 log4j 线程池复用时残留状态位
+            IN_APPEND.remove();
         }
     }
 

@@ -17,6 +17,17 @@ public class Config {
     private static final Logger LOGGER = LoggerFactory.getLogger(Config.class);
     private static final String CONFIG_FILE = "config/mcadmin.properties";
 
+    // 环境变量/系统属性覆盖：生产环境推荐用这些而不是明文 properties 文件
+    private static final String ENV_WS_URL = "MCADMIN_WS_URL";
+    private static final String ENV_WS_TOKEN = "MCADMIN_WS_TOKEN";
+    private static final String ENV_SERVER_ID = "MCADMIN_SERVER_ID";
+    private static final String PROP_WS_URL = "mcadmin.ws.url";
+    private static final String PROP_WS_TOKEN = "mcadmin.ws.token";
+    private static final String PROP_SERVER_ID = "mcadmin.server.id";
+
+    private static final String DEFAULT_WS_URL = "wss://your-server-address/mc-admin/ws/mod";
+    private static final String DEFAULT_WS_TOKEN = "change-me-in-config-file";
+
     private static final String DEFAULT_ALLOWED_COMMANDS =
         "list,say,op,deop,kick,ban,pardon,whitelist,save-all,time,weather," +
         "gamemode,tp,give,tell,msg,effect,difficulty,gamerule,seed,title,tellraw,stop," +
@@ -67,8 +78,8 @@ public class Config {
     }
 
     private static void setDefaults() {
-        props.setProperty("ws.url", "ws://your-server-address/mc-admin/ws/mod");
-        props.setProperty("ws.token", "change-me-in-config-file");
+        props.setProperty("ws.url", DEFAULT_WS_URL);
+        props.setProperty("ws.token", DEFAULT_WS_TOKEN);
         // server.id 留空，由 ensureServerId() 自动生成
         props.setProperty("server.id", "");
         props.setProperty("server.restart_script", "");
@@ -106,16 +117,34 @@ public class Config {
         restrictPermissions(configFile);
     }
 
+    /**
+     * 读取覆盖链：系统属性（-D）→ 环境变量 → properties 文件 → 默认值。
+     * 生产环境推荐通过 env/系统属性注入敏感配置，避免写入明文文件。
+     */
+    private static String resolve(String sysProp, String envVar, String propKey, String fallback) {
+        String fromSys = System.getProperty(sysProp);
+        if (fromSys != null && !fromSys.isEmpty()) return fromSys;
+        String fromEnv = System.getenv(envVar);
+        if (fromEnv != null && !fromEnv.isEmpty()) return fromEnv;
+        return props.getProperty(propKey, fallback);
+    }
+
     public static String getWsUrl() {
-        return props.getProperty("ws.url", "ws://your-server-address/mc-admin/ws/mod");
+        String url = resolve(PROP_WS_URL, ENV_WS_URL, "ws.url", DEFAULT_WS_URL);
+        if (url.startsWith("ws://")) {
+            LOGGER.warn("WebSocket URL uses plaintext ws://; token will traverse network unencrypted. " +
+                "Switch to wss:// in production (override via env {} or system property -D{}).", ENV_WS_URL, PROP_WS_URL);
+        }
+        return url;
     }
 
     public static String getAuthToken() {
-        return props.getProperty("ws.token", "change-me-in-config-file");
+        return resolve(PROP_WS_TOKEN, ENV_WS_TOKEN, "ws.token", DEFAULT_WS_TOKEN);
     }
 
     public static String getServerId() {
-        return props.getProperty("server.id");
+        String override = resolve(PROP_SERVER_ID, ENV_SERVER_ID, "server.id", null);
+        return override != null ? override : props.getProperty("server.id");
     }
 
     public static long getReportInterval() {

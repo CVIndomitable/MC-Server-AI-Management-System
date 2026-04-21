@@ -7,7 +7,7 @@ final class WebSocketManager {
     var isConnected = false
 
     private var webSocket: URLSessionWebSocketTask?
-    private let wsURL = "ws://47.113.221.26/mc-admin/ws"
+    private var wsURL: String { ServerConfig.webSocketURL }
     private var token: String?
     private var serverId: String?
     private var reconnectAttempts = 0
@@ -48,40 +48,24 @@ final class WebSocketManager {
     // MARK: - 内部连接
 
     private func doConnect() {
-        guard let url = URL(string: wsURL) else { return }
+        guard let token, let serverId, let url = URL(string: wsURL) else { return }
 
-        webSocket = urlSession.webSocketTask(with: url)
+        // 后端鉴权走 HTTP header（Authorization + X-Server-Id），accept 前校验；
+        // 旧的发送 {"type":"auth",...} 消息不被后端接受（会被白名单拒）。
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(serverId, forHTTPHeaderField: "X-Server-Id")
+
+        webSocket = urlSession.webSocketTask(with: request)
         webSocket?.resume()
 
-        sendAuth()
-        startAuthTimeout()
+        // 握手成功即视为已鉴权：后端在 accept() 前已校验 token，
+        // 若 token 错误会直接 close(1008)，onError 触发重连。
+        isAuthenticated = true
+        reconnectAttempts = 0
+        setConnected(true)
+
         receiveMessage()
-    }
-
-    private func sendAuth() {
-        guard let token, let serverId else { return }
-
-        let auth: [String: String] = [
-            "type": "auth",
-            "token": token,
-            "server_id": serverId,
-        ]
-
-        guard let data = try? JSONSerialization.data(withJSONObject: auth),
-              let text = String(data: data, encoding: .utf8) else { return }
-
-        webSocket?.send(.string(text)) { _ in }
-    }
-
-    private func startAuthTimeout() {
-        authTimeoutTask?.cancel()
-        authTimeoutTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(5))
-            guard let self, !Task.isCancelled, !self.isAuthenticated else { return }
-            // 认证超时，断开重连
-            self.webSocket?.cancel(with: .goingAway, reason: nil)
-            self.scheduleReconnect()
-        }
     }
 
     private func receiveMessage() {

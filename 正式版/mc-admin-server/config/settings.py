@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     redis_db: int = 0
 
     mod_auth_token: str
+    # 是否允许未登记的 server_id 首次连接时自动注册到数据库
+    # 生产环境建议关闭：所有服务器必须由管理员预先绑定后才能连入
+    mod_allow_new_servers: bool = True
 
     cache_ttl_seconds: int = 3600  # 命令缓存过期时间（秒），默认1小时
     cache_max_size: int = 500       # 最大缓存条目数

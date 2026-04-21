@@ -10,6 +10,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -21,6 +23,9 @@ public class WebSocketManager {
     private static final long HEARTBEAT_INTERVAL = 30000;
     private static final int MAX_MESSAGE_SIZE = 1024 * 1024; // 1MB消息大小限制
     private static final int MAX_RECONNECT_ATTEMPTS = 50; // 最大重连次数（约30分钟后放弃）
+    // 待确认命令有效期 5 分钟，超时视为放弃确认，避免 Map 无限膨胀
+    private static final long PENDING_CONFIRM_TTL_MS = 5 * 60 * 1000L;
+    private static final long PENDING_CONFIRM_SWEEP_MS = 60 * 1000L;
 
     private volatile WebSocket webSocket;
     private final CommandExecutor commandExecutor;
@@ -41,14 +46,31 @@ public class WebSocketManager {
         });
     private volatile ScheduledFuture<?> reconnectFuture;
     private volatile ScheduledFuture<?> heartbeatFuture;
+    private volatile ScheduledFuture<?> pendingSweepFuture;
 
-    // 待确认命令追踪，防止伪造 confirmed=true 绕过确认
-    private final Set<String> pendingConfirmations = ConcurrentHashMap.newKeySet();
+    // 待确认命令追踪：command_id → 加入时间戳（ms）
+    // 防止伪造 confirmed=true 绕过确认；超时未确认则被 sweep 清除，避免 OOM
+    private final ConcurrentHashMap<String, Long> pendingConfirmations = new ConcurrentHashMap<>();
 
     public WebSocketManager(CommandExecutor commandExecutor, StatusReporter statusReporter) {
         this.commandExecutor = commandExecutor;
         this.statusReporter = statusReporter;
         this.httpClient = HttpClient.newHttpClient();
+        startPendingSweep();
+    }
+
+    private void startPendingSweep() {
+        pendingSweepFuture = scheduler.scheduleAtFixedRate(() -> {
+            long cutoff = System.currentTimeMillis() - PENDING_CONFIRM_TTL_MS;
+            Iterator<Map.Entry<String, Long>> it = pendingConfirmations.entrySet().iterator();
+            while (it.hasNext()) {
+                Map.Entry<String, Long> e = it.next();
+                if (e.getValue() < cutoff) {
+                    it.remove();
+                    LOGGER.info("Pending confirmation {} expired after {}ms, discarded", e.getKey(), PENDING_CONFIRM_TTL_MS);
+                }
+            }
+        }, PENDING_CONFIRM_SWEEP_MS, PENDING_CONFIRM_SWEEP_MS, TimeUnit.MILLISECONDS);
     }
 
     public void setAiChatBridge(com.mcadmin.mod.ai.AiChatBridge bridge) {
@@ -190,14 +212,14 @@ public class WebSocketManager {
                 && commandExecutor.isDangerousAction(action, payload)) {
             String detail = commandExecutor.describeCommand(action, payload);
             LOGGER.warn("Dangerous command requires confirmation: {} ({})", detail, commandId);
-            pendingConfirmations.add(commandId);
+            pendingConfirmations.put(commandId, System.currentTimeMillis());
             sendConfirmRequired(commandId, action, detail, adminId);
             return;
         }
 
         // 如果标记了 confirmed，必须是之前请求过确认的命令
         if (confirmed && Config.requireConfirmation()) {
-            if (!pendingConfirmations.remove(commandId)) {
+            if (pendingConfirmations.remove(commandId) == null) {
                 LOGGER.warn("Received confirmed command {} that was not pending confirmation, rejecting", commandId);
                 sendCommandResult(commandId, false, "Command was not pending confirmation", adminId);
                 return;
@@ -332,6 +354,12 @@ public class WebSocketManager {
         if (rc != null) {
             rc.cancel(false);
             reconnectFuture = null;
+        }
+
+        ScheduledFuture<?> sw = pendingSweepFuture;
+        if (sw != null) {
+            sw.cancel(false);
+            pendingSweepFuture = null;
         }
 
         WebSocket ws = webSocket;

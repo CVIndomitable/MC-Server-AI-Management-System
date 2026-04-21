@@ -5,7 +5,7 @@ import Foundation
 actor APIClient {
     static let shared = APIClient()
 
-    private let baseURL = "http://47.113.221.26/mc-admin"
+    private var baseURL: String { ServerConfig.baseURL }
     private let session: URLSession
 
     private init() {
