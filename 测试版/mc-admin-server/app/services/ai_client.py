@@ -141,6 +141,70 @@ class ProviderPool:
             f"所有 {len(self._providers)} 个供应商均不可用，最后错误: {last_error}"
         )
 
+    async def call_with_failover_stream(self, **create_params):
+        """
+        流式调用，按优先级遍历 provider。
+        返回 (stream, used_provider_dict, degraded)。
+        全部失败抛出 NoProviderAvailableError，400 直接抛 BadRequestError。
+        """
+        if not self._loaded:
+            await self.init()
+        if not self._providers:
+            raise NoProviderAvailableError("未配置任何 LLM API 供应商")
+
+        last_error: Optional[Exception] = None
+        requested_model = create_params.get("model")
+        for idx, provider in enumerate(self._providers):
+            client = self._clients.get(provider["id"])
+            if client is None:
+                continue
+            # 按 provider 的 model_map 替换模型名
+            params = dict(create_params)
+            model_map = provider.get("model_map") or {}
+            if requested_model and requested_model in model_map:
+                mapped = model_map[requested_model]
+                if mapped and mapped != requested_model:
+                    logger.debug(
+                        f"Provider '{provider['name']}' 模型映射(流式): {requested_model} → {mapped}"
+                    )
+                    params["model"] = mapped
+            try:
+                stream = client.messages.stream(**params)
+                # 启动流
+                await stream.__aenter__()
+                degraded = idx > 0
+                if degraded:
+                    logger.warning(
+                        f"Provider 降级(流式)：已切到 '{provider['name']}'（优先级 {provider['priority']}），"
+                        f"前面 {idx} 个供应商不可用"
+                    )
+                return stream, provider, degraded
+            except BadRequestError:
+                raise
+            except (
+                APIConnectionError, APITimeoutError, RateLimitError,
+                InternalServerError, AuthenticationError, PermissionDeniedError,
+            ) as e:
+                last_error = e
+                logger.warning(
+                    f"Provider '{provider['name']}' 流式调用失败（{type(e).__name__}），尝试下一个: {e}"
+                )
+                continue
+            except APIStatusError as e:
+                if e.status_code >= 500:
+                    last_error = e
+                    logger.warning(f"Provider '{provider['name']}' 返回 {e.status_code}(流式)，尝试下一个")
+                    continue
+                raise
+            except APIError as e:
+                last_error = e
+                logger.warning(f"Provider '{provider['name']}' 未知 APIError(流式)，尝试下一个: {e}")
+                continue
+
+        raise NoProviderAvailableError(
+            f"所有 {len(self._providers)} 个供应商均不可用(流式)，最后错误: {last_error}"
+        )
+
     async def close(self):
         async with self._lock:
             for client in self._clients.values():

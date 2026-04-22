@@ -436,4 +436,230 @@ class AIAgent:
         if len(self.conversation_history[hkey]) > self.max_history_length:
             self.conversation_history[hkey] = self.conversation_history[hkey][-self.max_history_length:]
 
+    async def process_message_stream(
+        self,
+        user_message: str,
+        server_id: str,
+        current_status: dict = None,
+        query_only: bool = False,
+        model_tier: Optional[str] = None,
+        admin_id: str = "admin",
+    ):
+        """
+        流式处理消息，yield 事件字典：
+        - {"type": "text_delta", "text": "..."}  # 文本增量
+        - {"type": "tool_call", "id": "...", "name": "...", "input": {...}}  # 工具调用
+        - {"type": "done", "model_used": "...", "provider_used": "...", "degraded": bool}  # 完成
+        - {"type": "error", "error": "..."}  # 错误
+        """
+        hkey = (admin_id, server_id)
+        if hkey not in self.conversation_history:
+            self.conversation_history[hkey] = []
+        self._touch_conversation(hkey)
+
+        # 构建用户消息
+        if current_status:
+            user_msg = {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_message},
+                    {"type": "text", "text": f"[系统附加·当前服务器状态]{json.dumps(current_status, ensure_ascii=False)}"},
+                ]
+            }
+        else:
+            user_msg = {"role": "user", "content": user_message}
+
+        self.conversation_history[hkey].append(user_msg)
+        self._trim_history(hkey)
+
+        # ---- 命令缓存检查 ----
+        if not query_only:
+            try:
+                cached = await command_cache.get(user_message, server_id, user_id=admin_id)
+            except Exception as e:
+                logger.warning(f"缓存查询失败，跳过: {e}")
+                cached = None
+
+            if cached:
+                logger.info(f"[{server_id}] 缓存命中（流式），跳过大模型调用: '{user_message[:40]}'")
+                # 缓存命中：直接返回缓存的文本和工具调用
+                if cached["text"]:
+                    yield {"type": "text_delta", "text": cached["text"]}
+
+                content_blocks = []
+                if cached["text"]:
+                    content_blocks.append({"type": "text", "text": cached["text"]})
+
+                for tc in cached["tool_calls"]:
+                    new_id = f"cache_{uuid.uuid4().hex[:12]}"
+                    yield {
+                        "type": "tool_call",
+                        "id": new_id,
+                        "name": tc["name"],
+                        "input": copy.deepcopy(tc["input"]),
+                    }
+                    content_blocks.append({
+                        "type": "tool_use",
+                        "id": new_id,
+                        "name": tc["name"],
+                        "input": copy.deepcopy(tc["input"]),
+                    })
+
+                self.conversation_history[hkey].append({
+                    "role": "assistant",
+                    "content": content_blocks,
+                })
+
+                yield {
+                    "type": "done",
+                    "model_used": cached.get("model_used", "cache"),
+                    "cache_hit": True,
+                    "degraded": False,
+                }
+                return
+
+        # ---- 正常流式调用大模型 ----
+        model = self._resolve_model(user_message, query_only, model_tier)
+        logger.info(f"[{server_id}] 流式模型路由: {model} (tier={model_tier}, query_only={query_only})")
+
+        base_prompt = QUERY_ONLY_PROMPT_BASE if query_only else SYSTEM_PROMPT_BASE
+        system_prompt = await self._build_system_prompt(base_prompt, admin_id, server_id, user_message=user_message)
+
+        create_params = {
+            "model": model,
+            "max_tokens": 2048,
+            "system": system_prompt,
+            "messages": self.conversation_history[hkey],
+        }
+        if not query_only:
+            create_params["tools"] = TOOLS
+
+        try:
+            # 使用 provider_pool 的流式调用
+            stream, used_provider, degraded = await provider_pool.call_with_failover_stream(**create_params)
+        except Exception as e:
+            logger.error(f"流式调用失败: {e}")
+            yield {"type": "error", "error": str(e)}
+            return
+
+        # 收集完整响应用于保存到历史
+        full_text = ""
+        tool_calls = []
+        content_blocks = []
+        allowed_tools = {t["name"] for t in TOOLS}
+        current_tool_input_json = ""  # 累积工具调用的 JSON 字符串
+
+        try:
+            async for event in stream:
+                event_type = event.type
+
+                if event_type == "message_start":
+                    continue
+
+                elif event_type == "content_block_start":
+                    block = event.content_block
+                    if block.type == "text":
+                        content_blocks.append({"type": "text", "text": ""})
+                    elif block.type == "tool_use":
+                        content_blocks.append({
+                            "type": "tool_use",
+                            "id": block.id,
+                            "name": block.name,
+                            "input": {},
+                        })
+                        current_tool_input_json = ""
+
+                elif event_type == "content_block_delta":
+                    delta = event.delta
+                    if delta.type == "text_delta":
+                        # 文本增量
+                        text_chunk = delta.text
+                        full_text += text_chunk
+                        # 更新 content_blocks
+                        for cb in reversed(content_blocks):
+                            if cb["type"] == "text":
+                                cb["text"] += text_chunk
+                                break
+                        yield {"type": "text_delta", "text": text_chunk}
+
+                    elif delta.type == "input_json_delta":
+                        # 工具调用的 input 增量（JSON 片段）
+                        current_tool_input_json += delta.partial_json
+
+                elif event_type == "content_block_stop":
+                    # 内容块结束
+                    if content_blocks:
+                        last_block = content_blocks[-1]
+                        if last_block["type"] == "tool_use":
+                            # 解析完整的 tool input JSON
+                            try:
+                                tool_input = json.loads(current_tool_input_json) if current_tool_input_json else {}
+                                last_block["input"] = tool_input
+                            except json.JSONDecodeError as e:
+                                logger.error(f"工具调用 input JSON 解析失败: {e}")
+                                last_block["input"] = {}
+                            current_tool_input_json = ""
+
+                elif event_type == "message_delta":
+                    pass
+
+                elif event_type == "message_stop":
+                    pass
+
+        except Exception as e:
+            logger.error(f"流式处理出错: {e}")
+            yield {"type": "error", "error": str(e)}
+            return
+        finally:
+            # 确保 stream 正确关闭
+            try:
+                await stream.__aexit__(None, None, None)
+            except Exception:
+                pass
+
+        # 从 content_blocks 中提取工具调用并发送
+        for block in content_blocks:
+            if block["type"] == "tool_use":
+                tool_name = block["name"]
+                if tool_name in allowed_tools:
+                    tool_calls.append({
+                        "id": block["id"],
+                        "name": tool_name,
+                        "input": block.get("input", {}),
+                    })
+                    yield {
+                        "type": "tool_call",
+                        "id": block["id"],
+                        "name": tool_name,
+                        "input": block["input"],
+                    }
+                else:
+                    logger.warning(f"AI返回了未知工具调用: {tool_name}，已忽略")
+
+        # 保存到历史
+        assistant_msg = {"role": "assistant", "content": content_blocks}
+        self.conversation_history[hkey].append(assistant_msg)
+
+        # 缓存结果
+        if not query_only:
+            try:
+                cache_result = {
+                    "text": full_text,
+                    "tool_calls": tool_calls,
+                    "model_used": model,
+                    "provider_used": used_provider.get("name"),
+                    "degraded": degraded,
+                }
+                await command_cache.put(user_message, server_id, cache_result, user_id=admin_id)
+            except Exception as e:
+                logger.warning(f"缓存写入失败: {e}")
+
+        # 发送完成事件
+        yield {
+            "type": "done",
+            "model_used": model,
+            "provider_used": used_provider.get("name"),
+            "degraded": degraded,
+        }
+
 ai_agent = AIAgent()
