@@ -14,6 +14,11 @@ def create_access_token(data: dict) -> str:
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, settings.secret_key, algorithm="HS256")
 
+def decode_token(token: str) -> dict:
+    """同步解码 JWT。用于 WebSocket 鉴权等不走 FastAPI Depends 的场景。
+    失败抛 JWTError，调用方自行捕获。"""
+    return jwt.decode(token, settings.secret_key, algorithms=["HS256"])
+
 async def verify_token(credentials: HTTPAuthorizationCredentials = Security(security)) -> dict:
     try:
         payload = jwt.decode(credentials.credentials, settings.secret_key, algorithms=["HS256"])
