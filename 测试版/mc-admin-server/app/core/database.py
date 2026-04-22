@@ -81,6 +81,33 @@ class UserDatabase:
                 await db.execute("ALTER TABLE api_providers ADD COLUMN model_map TEXT")
             except aiosqlite.OperationalError:
                 pass  # 列已存在
+            # Spark profiler 档案馆：每次 /spark profiler start→stop 一个会话
+            # status: running / stopped / analyzing / analyzed / failed
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS spark_profiles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    admin_id TEXT NOT NULL,
+                    server_id TEXT NOT NULL,
+                    started_at TEXT NOT NULL,
+                    stopped_at TEXT,
+                    start_command TEXT,
+                    stop_output TEXT,
+                    profile_url TEXT,
+                    profile_raw TEXT,
+                    ai_analysis TEXT,
+                    ai_thinking TEXT,
+                    ai_model TEXT,
+                    ai_provider TEXT,
+                    analyzed_at TEXT,
+                    status TEXT NOT NULL DEFAULT 'running',
+                    error TEXT,
+                    FOREIGN KEY (server_id) REFERENCES servers(server_id) ON DELETE CASCADE
+                )
+            """)
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_spark_server_time "
+                "ON spark_profiles(server_id, started_at DESC)"
+            )
             await db.commit()
         logger.info(f"数据库已初始化: {self.db_path}")
 
@@ -511,6 +538,133 @@ class UserDatabase:
             async with db.execute("SELECT COUNT(*) FROM api_providers") as cursor:
                 row = await cursor.fetchone()
                 return row[0] if row else 0
+
+    # ===================== Spark Profiler 档案 =====================
+
+    async def create_spark_profile(
+        self, admin_id: str, server_id: str, start_command: str | None
+    ) -> dict:
+        now = datetime.now(timezone.utc).isoformat()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "INSERT INTO spark_profiles (admin_id, server_id, started_at, start_command, status) "
+                "VALUES (?, ?, ?, ?, 'running')",
+                (admin_id, server_id, now, start_command),
+            )
+            await db.commit()
+            return await self.get_spark_profile(cursor.lastrowid)
+
+    async def stop_spark_profile(
+        self, profile_id: int, profile_url: str | None, stop_output: str | None
+    ) -> dict | None:
+        now = datetime.now(timezone.utc).isoformat()
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "UPDATE spark_profiles SET stopped_at=?, profile_url=?, stop_output=?, status='stopped' "
+                "WHERE id=? AND status='running'",
+                (now, profile_url, stop_output, profile_id),
+            )
+            await db.commit()
+            if cursor.rowcount == 0:
+                return None
+        return await self.get_spark_profile(profile_id)
+
+    async def find_running_spark_profile(self, server_id: str) -> dict | None:
+        """找该服务器最近一个 running 档案（用于 stop 时关联）"""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT * FROM spark_profiles WHERE server_id=? AND status='running' "
+                "ORDER BY started_at DESC LIMIT 1",
+                (server_id,),
+            ) as cursor:
+                row = await cursor.fetchone()
+                return dict(row) if row else None
+
+    async def get_spark_profile(self, profile_id: int) -> dict | None:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT * FROM spark_profiles WHERE id=?", (profile_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                return dict(row) if row else None
+
+    async def list_spark_profiles(
+        self, server_id: str, limit: int = 20, offset: int = 0,
+        include_raw: bool = False,
+    ) -> list[dict]:
+        # 列表默认不返回大字段，省带宽
+        cols = (
+            "id, admin_id, server_id, started_at, stopped_at, start_command, "
+            "profile_url, ai_model, ai_provider, analyzed_at, status, error"
+        )
+        if include_raw:
+            cols = "*"
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                f"SELECT {cols} FROM spark_profiles WHERE server_id=? "
+                "ORDER BY started_at DESC LIMIT ? OFFSET ?",
+                (server_id, limit, offset),
+            ) as cursor:
+                rows = await cursor.fetchall()
+                return [dict(r) for r in rows]
+
+    async def count_spark_profiles(self, server_id: str) -> int:
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                "SELECT COUNT(*) FROM spark_profiles WHERE server_id=?", (server_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                return row[0] if row else 0
+
+    async def update_spark_profile_analysis(
+        self, profile_id: int,
+        analysis: str | None = None,
+        thinking: str | None = None,
+        model: str | None = None,
+        provider: str | None = None,
+        profile_raw: str | None = None,
+        status: str = "analyzed",
+        error: str | None = None,
+    ) -> dict | None:
+        now = datetime.now(timezone.utc).isoformat()
+        fields, values = [], []
+        fields.append("ai_analysis=?"); values.append(analysis)
+        fields.append("ai_thinking=?"); values.append(thinking)
+        fields.append("ai_model=?"); values.append(model)
+        fields.append("ai_provider=?"); values.append(provider)
+        if profile_raw is not None:
+            fields.append("profile_raw=?"); values.append(profile_raw)
+        fields.append("analyzed_at=?"); values.append(now)
+        fields.append("status=?"); values.append(status)
+        fields.append("error=?"); values.append(error)
+        values.append(profile_id)
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                f"UPDATE spark_profiles SET {', '.join(fields)} WHERE id=?", values
+            )
+            await db.commit()
+            if cursor.rowcount == 0:
+                return None
+        return await self.get_spark_profile(profile_id)
+
+    async def set_spark_profile_status(self, profile_id: int, status: str) -> bool:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "UPDATE spark_profiles SET status=? WHERE id=?", (status, profile_id)
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def delete_spark_profile(self, profile_id: int) -> bool:
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute(
+                "DELETE FROM spark_profiles WHERE id=?", (profile_id,)
+            )
+            await db.commit()
+            return cursor.rowcount > 0
 
 
 user_db = UserDatabase()

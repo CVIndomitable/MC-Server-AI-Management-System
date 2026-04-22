@@ -16,6 +16,11 @@ struct MainTabView: View {
                     Label("状态", systemImage: "chart.bar")
                 }
 
+            ArchiveView()
+                .tabItem {
+                    Label("档案馆", systemImage: "archivebox")
+                }
+
             if actionsTabEnabled {
                 ActionsView()
                     .tabItem {

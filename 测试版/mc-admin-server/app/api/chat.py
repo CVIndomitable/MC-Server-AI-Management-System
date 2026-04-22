@@ -6,6 +6,7 @@ from app.core.permissions import require_server_access
 from app.services.ai_agent import ai_agent
 from app.services.memory import memory_service
 from app.services.command_reviewer import command_reviewer
+from app.services.spark_archive import capture_execute_command
 from app.websocket.manager import manager
 from config.settings import settings
 from collections import defaultdict
@@ -196,6 +197,12 @@ async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
                 ai_agent.add_tool_result(
                     admin_id, request.server_id, tool_call["id"], result.get("output", "")
                 )
+                # 档案馆：识别 /spark profiler start|stop 并落库（内部已吞异常）
+                if tool_name == "execute_command":
+                    await capture_execute_command(
+                        admin_id, request.server_id,
+                        tool_input.get("command", ""), result,
+                    )
             except Exception as e:
                 logger.error(f"Tool execution failed for {tool_name}: {e}")
                 error_result = {"success": False, "output": f"执行失败: {str(e)}"}

@@ -5,6 +5,7 @@ from app.websocket.chat_manager import chat_manager
 from app.services.ai_agent import ai_agent
 from app.services.memory import memory_service
 from app.services.command_reviewer import command_reviewer
+from app.services.spark_archive import capture_execute_command
 from app.models.review import ReviewDecision
 from app.models.schemas import ReviewInfo
 from app.core.auth import decode_token
@@ -323,6 +324,12 @@ async def chat_websocket(
                                 ai_agent.add_tool_result(
                                     admin_id, server_id, tool_id, result.get("output", "")
                                 )
+                                # 档案馆：识别 /spark profiler start|stop 并落库
+                                if tool_name == "execute_command":
+                                    await capture_execute_command(
+                                        admin_id, server_id,
+                                        tool_input.get("command", ""), result,
+                                    )
                             except Exception as e:
                                 logger.error(f"工具执行失败 {tool_name}: {e}")
                                 error_output = f"执行失败: {str(e)}"

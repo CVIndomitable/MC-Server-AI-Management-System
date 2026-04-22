@@ -215,6 +215,56 @@ actor APIClient {
         try await request("GET", path: "/api/v1/health")
     }
 
+    // MARK: - 档案馆（Spark profiler 采样）
+
+    func listSparkArchives(serverId: String, limit: Int = 20, offset: Int = 0) async throws -> SparkProfileListResponse {
+        try await request(
+            "GET", path: "/api/v1/archive/spark/\(serverId)",
+            query: ["limit": String(limit), "offset": String(offset)]
+        )
+    }
+
+    func getSparkArchive(serverId: String, profileId: Int) async throws -> SparkProfileDetail {
+        try await request("GET", path: "/api/v1/archive/spark/\(serverId)/\(profileId)")
+    }
+
+    /// 触发 AI 分析（启用扩展思考）。耗时较长，调用方应显示 loading。
+    func analyzeSparkArchive(serverId: String, profileId: Int) async throws -> AnalyzeArchiveResponse {
+        // 分析需要较长时间（扩展思考），绕过默认 30s 超时
+        let urlString = "\(baseURL)/api/v1/archive/spark/\(serverId)/\(profileId)/analyze"
+        guard let url = URL(string: urlString) else { throw APIError.invalidResponse }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = currentToken() {
+            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        // 分析最多 3 分钟
+        req.timeoutInterval = 180
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 180
+        config.timeoutIntervalForResource = 180
+        let longSession = URLSession(configuration: config)
+        let (data, response) = try await longSession.data(for: req)
+        guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
+        switch http.statusCode {
+        case 200..<300:
+            return try JSONDecoder().decode(AnalyzeArchiveResponse.self, from: data)
+        case 401: throw APIError.unauthorized
+        case 403: throw APIError.forbidden
+        case 404: throw APIError.notFound
+        default:
+            if let msg = try? JSONDecoder().decode(ValidationError.self, from: data) {
+                throw APIError.server(msg.detail)
+            }
+            throw APIError.server("分析失败 (\(http.statusCode))")
+        }
+    }
+
+    func deleteSparkArchive(serverId: String, profileId: Int) async throws -> MessageResponse {
+        try await request("DELETE", path: "/api/v1/archive/spark/\(serverId)/\(profileId)")
+    }
+
     // MARK: - Provider 管理（仅管理员）
 
     func listProviders() async throws -> ProvidersResponse {

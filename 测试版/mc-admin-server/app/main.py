@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from app.api import auth, chat, memory, servers, admin_providers
+from app.api import auth, chat, memory, servers, admin_providers, archive
 from app.websocket import routes as ws_routes
 from app.core.database import user_db
 from app.services.memory import memory_service
@@ -96,6 +96,7 @@ app.include_router(chat.router)
 app.include_router(servers.router)
 app.include_router(memory.router)
 app.include_router(admin_providers.router)
+app.include_router(archive.router)
 app.include_router(ws_routes.router)
 
 @app.get("/")
