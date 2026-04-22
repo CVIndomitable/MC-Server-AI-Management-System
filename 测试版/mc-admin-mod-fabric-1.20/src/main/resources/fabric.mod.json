@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "mcadmin",
+  "version": "${version}",
+  "name": "MC Admin Mod",
+  "description": "AI-powered Minecraft server management mod",
+  "authors": ["MCAdmin Team"],
+  "contact": {},
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.mcadmin.mod.MCAdminMod"],
+    "client": ["com.mcadmin.mod.client.MCAdminModClient"]
+  },
+  "mixins": [],
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": "~1.20",
+    "java": ">=17",
+    "fabric-api": "*"
+  }
+}

@@ -1,0 +1,1 @@
+../../../../../../../tmp/MCAdmin.dst/Applications/MC Admin.app

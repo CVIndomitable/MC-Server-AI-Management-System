@@ -1,0 +1,23 @@
+{
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Models/AuthModels.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AuthModels.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AuthModels.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AuthModels.dia",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AuthModels.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/AuthModels.swiftdeps"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Models/ChatModels.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatModels.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatModels.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatModels.dia",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatModels.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatModels.swiftdeps"
+  },
+  "/Users/lianran/apps/服务器管理ai/mc-admin-ios/MCAdmin/Views/ChatView.swift" : {
+    "const-values" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatView.swiftconstvalues",
+    "dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatView.d",
+    "diagnostics" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatView.dia",
+    "object" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatView.o",
+    "swift-dependencies" : "/Users/lianran/apps/服务器管理ai/mc-admin-ios/build/MCAdmin.build/Debug-iphoneos/MCAdmin.build/Objects-normal/arm64/ChatView.swiftdeps"
+  }
+}

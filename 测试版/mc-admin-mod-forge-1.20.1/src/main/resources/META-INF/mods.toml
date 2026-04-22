@@ -1,0 +1,24 @@
+modLoader="javafml"
+loaderVersion="${loader_version_range}"
+license="MIT"
+
+[[mods]]
+modId="mcadmin"
+version="${mod_version}"
+displayName="MC Admin Mod"
+description="AI-powered Minecraft server management mod"
+authors="MCAdmin Team"
+
+[[dependencies.mcadmin]]
+    modId="forge"
+    type="required"
+    versionRange="${forge_version_range}"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.mcadmin]]
+    modId="minecraft"
+    type="required"
+    versionRange="${minecraft_version_range}"
+    ordering="NONE"
+    side="BOTH"

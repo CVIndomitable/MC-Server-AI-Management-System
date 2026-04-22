@@ -1,0 +1,71 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.gradle.userdev' version '7.0.145'
+}
+
+version = '1.0.1'
+group = 'com.mcadmin.mod'
+
+base {
+    archivesName = 'mcadmin-mod'
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'lucko'
+        url = 'https://repo.lucko.me/'
+    }
+}
+
+// 解决 ASM 模块路径与类路径版本冲突
+configurations.all {
+    resolutionStrategy {
+        force 'org.ow2.asm:asm:9.7'
+        force 'org.ow2.asm:asm-commons:9.7'
+        force 'org.ow2.asm:asm-tree:9.7'
+        force 'org.ow2.asm:asm-util:9.7'
+        force 'org.ow2.asm:asm-analysis:9.7'
+    }
+}
+
+dependencies {
+    implementation "net.neoforged:neoforge:${neo_version}"
+    // WebSocket 使用 Java 11+ 内置 java.net.http.WebSocket，无需外部依赖
+    // Gson 已包含在 Minecraft 中，无需额外打包
+    // Spark API：compileOnly，运行时由 Spark 模组提供；未安装 Spark 时安全降级
+    compileOnly 'me.lucko:spark-api:0.1-SNAPSHOT'
+}
+
+runs {
+    server {
+        systemProperty 'forge.logging.console.level', 'debug'
+        programArgument '--nogui'
+    }
+    client {
+        systemProperty 'forge.logging.console.level', 'debug'
+    }
+}
+
+// 替换资源文件中的 ${} 变量
+tasks.withType(ProcessResources).configureEach {
+    var replaceProperties = [
+        minecraft_version      : minecraft_version,
+        minecraft_version_range: minecraft_version_range,
+        neo_version            : neo_version,
+        neo_version_range      : neo_version_range,
+        loader_version_range   : loader_version_range,
+        mod_id                 : 'mcadmin',
+        mod_version            : version,
+    ]
+    inputs.properties replaceProperties
+    filesMatching(['META-INF/neoforge.mods.toml']) {
+        expand replaceProperties + [project: project]
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}

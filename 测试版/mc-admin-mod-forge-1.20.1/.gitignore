@@ -1,0 +1,28 @@
+*.class
+*.log
+*.jar
+!gradle-wrapper.jar
+
+# Gradle
+.gradle/
+build/
+out/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+
+# Minecraft
+run/
+logs/
+config/mcadmin.properties
+
+# OS
+.DS_Store
+Thumbs.db
