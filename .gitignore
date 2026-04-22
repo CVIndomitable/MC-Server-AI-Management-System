@@ -16,8 +16,9 @@ Thumbs.db
 .env
 .env.local
 
-# MC模组运行时
+# MC模组运行时（NeoForge/Forge dev 运行产物）
 mc-admin-mod/runs/
+**/mc-admin-mod*/runs/
 
 # 日志/截图
 日志/
