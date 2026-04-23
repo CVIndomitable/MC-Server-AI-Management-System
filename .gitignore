@@ -31,3 +31,6 @@ mc-admin-ios/build/
 
 # Node
 node_modules/
+
+# 正式版 worktree（main 分支的嵌套 worktree，单独管理，不在 dev 分支跟踪）
+正式版/
