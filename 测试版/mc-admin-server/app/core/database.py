@@ -269,15 +269,33 @@ class UserDatabase:
         try:
             async with aiosqlite.connect(self.db_path) as db:
                 await db.execute("PRAGMA foreign_keys=ON")
-                # 如果该服务器没有任何绑定，第一个绑定的自动成为 owner
-                if not await self._is_server_bound(db, server_id):
-                    role = "owner"
-                await db.execute(
-                    "INSERT INTO user_servers (username, server_id, role, bound_at) VALUES (?, ?, ?, ?)",
-                    (username, server_id, role, now)
-                )
-                await db.commit()
-                return {"username": username, "server_id": server_id, "role": role, "bound_at": now}
+
+                # 使用事务确保原子性
+                async with db.execute("BEGIN IMMEDIATE"):
+                    # 如果该服务器没有任何绑定，第一个绑定的自动成为 owner
+                    async with db.execute(
+                        "SELECT COUNT(*) FROM user_servers WHERE server_id = ?", (server_id,)
+                    ) as cursor:
+                        row = await cursor.fetchone()
+                        if row[0] == 0:
+                            role = "owner"
+
+                    # 如果是 owner，检查是否已存在 owner
+                    if role == "owner":
+                        async with db.execute(
+                            "SELECT COUNT(*) FROM user_servers WHERE server_id = ? AND role = 'owner'",
+                            (server_id,)
+                        ) as cursor:
+                            row = await cursor.fetchone()
+                            if row[0] > 0:
+                                return None  # 已存在 owner
+
+                    await db.execute(
+                        "INSERT INTO user_servers (username, server_id, role, bound_at) VALUES (?, ?, ?, ?)",
+                        (username, server_id, role, now)
+                    )
+                    await db.commit()
+                    return {"username": username, "server_id": server_id, "role": role, "bound_at": now}
         except aiosqlite.IntegrityError:
             return None
 
@@ -512,13 +530,17 @@ class UserDatabase:
             fields.append("model_map = ?"); values.append(json.dumps(model_map, ensure_ascii=False))
         if not fields:
             return await self.get_provider(provider_id)
+
+        # 构建参数化查询
+        set_clause = ", ".join(f"{field.split(' = ')[0]} = ?" for field in fields)
         fields.append("updated_at = ?")
         values.append(datetime.now(timezone.utc).isoformat())
         values.append(provider_id)
+
         try:
             async with aiosqlite.connect(self.db_path) as db:
                 cursor = await db.execute(
-                    f"UPDATE api_providers SET {', '.join(fields)} WHERE id = ?", values
+                    f"UPDATE api_providers SET {set_clause}, updated_at = ? WHERE id = ?", values
                 )
                 await db.commit()
                 if cursor.rowcount == 0:

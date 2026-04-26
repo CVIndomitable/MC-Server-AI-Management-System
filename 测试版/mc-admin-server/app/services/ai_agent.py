@@ -193,7 +193,28 @@ class AIAgent:
         self.conversation_history: Dict[tuple, List[Dict]] = {}
         self.max_history_length = 50
         self.max_conversations = 200
+        self.max_total_memory_mb = 100  # 总内存上限（MB）
         self._access_order: Dict[tuple, float] = {}  # LRU跟踪
+
+    def _estimate_conversation_size(self, messages: List[Dict]) -> int:
+        """估算会话内存大小（字节）"""
+        return len(json.dumps(messages, ensure_ascii=False).encode('utf-8'))
+
+    def _get_total_memory_usage(self) -> float:
+        """获取当前总内存使用量（MB）"""
+        total_bytes = sum(
+            self._estimate_conversation_size(msgs)
+            for msgs in self.conversation_history.values()
+        )
+        return total_bytes / (1024 * 1024)
+
+    def _enforce_memory_limit(self):
+        """强制执行内存限制，超出时淘汰最久未使用的会话"""
+        while self._get_total_memory_usage() > self.max_total_memory_mb and self.conversation_history:
+            oldest = min(self._access_order, key=self._access_order.get)
+            self.conversation_history.pop(oldest, None)
+            self._access_order.pop(oldest, None)
+            logger.warning(f"内存超限，淘汰会话(LRU): {oldest}")
 
     def _resolve_model(self, message: str, query_only: bool, model_tier: Optional[str]) -> str:
         """根据消息内容和参数选择合适的模型"""
@@ -232,6 +253,8 @@ class AIAgent:
             self.conversation_history.pop(oldest, None)
             self._access_order.pop(oldest, None)
             logger.info(f"会话淘汰(LRU): {oldest}")
+        # 检查总内存使用量
+        self._enforce_memory_limit()
 
     async def process_message(self, user_message: str, server_id: str, current_status: dict = None, query_only: bool = False, model_tier: Optional[str] = None, admin_id: str = "admin") -> Dict[str, Any]:
         hkey = (admin_id, server_id)
