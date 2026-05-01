@@ -18,7 +18,10 @@ class UserDatabase:
         """初始化数据库，创建所有表"""
         db_dir = os.path.dirname(self.db_path)
         os.makedirs(db_dir, exist_ok=True)
-        os.chmod(db_dir, 0o700)
+        try:
+            os.chmod(db_dir, 0o700)
+        except (OSError, PermissionError):
+            pass  # 容器环境下可能无权限修改，跳过
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("PRAGMA journal_mode=WAL")
             await db.execute("PRAGMA foreign_keys=ON")

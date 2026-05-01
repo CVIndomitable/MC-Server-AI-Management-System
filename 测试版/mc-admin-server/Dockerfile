@@ -14,6 +14,8 @@ COPY --chown=appuser:appuser . .
 
 USER appuser
 
+ENV PYTHONPATH=/app
+
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
