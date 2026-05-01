@@ -8,30 +8,25 @@ from app.services.memory import memory_service
 from app.services.command_reviewer import command_reviewer
 from app.services.spark_archive import capture_execute_command
 from app.websocket.manager import manager
+from app.utils.rate_limiter import rate_limiter
 from config.settings import settings
-from collections import defaultdict
 from datetime import datetime
 from typing import Literal
 import re
-import time
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["chat"])
 
-# 聊天API速率限制（按用户）
-_chat_attempts: dict[str, list[float]] = defaultdict(list)
 
-
-def _check_chat_rate(user_id: str):
-    """检查聊天API速率限制"""
-    now = time.time()
-    window = settings.chat_rate_window
-    _chat_attempts[user_id] = [t for t in _chat_attempts[user_id] if now - t < window]
-    if len(_chat_attempts[user_id]) >= settings.chat_rate_limit:
-        raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试")
-    _chat_attempts[user_id].append(now)
+async def _check_chat_rate(user_id: str):
+    """检查聊天API速率限制（基于Redis的分布式限流）"""
+    await rate_limiter.check_rate(
+        f"chat:user:{user_id}",
+        settings.chat_rate_limit,
+        settings.chat_rate_window
+    )
 
 # MC玩家名仅允许字母、数字、下划线，长度1-16
 _VALID_MC_NAME = re.compile(r'^[a-zA-Z0-9_]{1,16}$')
@@ -97,7 +92,7 @@ async def _execute_tool(server_id: str, tool_name: str, tool_input: dict, curren
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest, user: dict = Depends(verify_token)):
     admin_id = user.get("sub", "admin")
-    _check_chat_rate(admin_id)
+    await _check_chat_rate(admin_id)
     await require_server_access(admin_id, request.server_id, min_role="admin")
 
     server_online = await manager.is_online(request.server_id)

@@ -106,11 +106,18 @@ class ConnectionManager:
 
     async def disconnect(self, server_id: str):
         async with self._lock:
+            # 清理该服务器的pending命令，防止内存泄漏
+            to_remove = [cid for cid in self.pending_commands if cid.startswith(f"cmd_{server_id}_")]
+            for cid in to_remove:
+                future = self.pending_commands.pop(cid, None)
+                if future and not future.done():
+                    future.cancel()
+
             if server_id in self.active_connections:
                 del self.active_connections[server_id]
             if server_id in self.server_status:
                 self.server_status[server_id]["online"] = False
-        logger.info(f"Server {server_id} disconnected")
+        logger.info(f"Server {server_id} disconnected, cleaned {len(to_remove)} pending commands")
 
     async def handle_message(self, server_id: str, message: dict):
         msg_type = message.get("type")

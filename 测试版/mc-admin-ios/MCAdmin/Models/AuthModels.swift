@@ -52,7 +52,7 @@ struct JWTPayload {
     let exp: TimeInterval
 
     var isExpired: Bool {
-        Date().timeIntervalSince1970 > (exp - 60)
+        Date().timeIntervalSince1970 > (exp - 30)
     }
 }
 

@@ -277,43 +277,17 @@ class AIAgent:
         self.conversation_history[hkey].append(user_msg)
         self._trim_history(hkey)
 
-        # ---- 命令缓存：相同消息直接复用上次的工具调用 ----
+        # ---- 命令缓存：仅缓存AI响应文本，不缓存工具调用（避免绕过审核） ----
+        cached_text = None
         if not query_only:
             try:
                 cached = await command_cache.get(user_message, server_id, user_id=admin_id)
+                if cached:
+                    # 仅使用缓存的文本响应，工具调用仍需重新生成和审核
+                    cached_text = cached.get("text", "")
+                    logger.info(f"[{server_id}] 缓存命中文本响应: '{user_message[:40]}'")
             except Exception as e:
                 logger.warning(f"缓存查询失败，跳过: {e}")
-                cached = None
-            if cached:
-                logger.info(f"[{server_id}] 缓存命中，跳过大模型调用: '{user_message[:40]}'")
-                result = {
-                    "text": cached["text"],
-                    "tool_calls": [],
-                    "model_used": cached.get("model_used", "cache"),
-                    "cache_hit": True,
-                    "degraded": False,
-                }
-                content_blocks = []
-                if cached["text"]:
-                    content_blocks.append({"type": "text", "text": cached["text"]})
-                for tc in cached["tool_calls"]:
-                    new_id = f"cache_{uuid.uuid4().hex[:12]}"
-                    result["tool_calls"].append({
-                        "id": new_id,
-                        "name": tc["name"],
-                        "input": copy.deepcopy(tc["input"]),
-                    })
-                    content_blocks.append({
-                        "type": "tool_use",
-                        "id": new_id,
-                        "name": tc["name"],
-                        "input": copy.deepcopy(tc["input"]),
-                    })
-                self.conversation_history[hkey].append({
-                    "role": "assistant",
-                    "content": content_blocks,
-                })
-                return result
 
         # ---- 正常调用大模型 ----
         model = self._resolve_model(user_message, query_only, model_tier)

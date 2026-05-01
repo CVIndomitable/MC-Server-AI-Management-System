@@ -386,6 +386,7 @@ struct SettingsView: View {
             clearPasswordFields()
             showAlertMessage("密码修改成功")
         } catch {
+            clearPasswordFields()
             showAlertMessage(error.localizedDescription)
         }
     }
@@ -394,11 +395,11 @@ struct SettingsView: View {
         do {
             let _ = try await APIClient.shared.register(username: newUsername, password: newUserPassword, role: newUserRole)
             showCreateUser = false
-            newUsername = ""
-            newUserPassword = ""
+            clearCreateUserFields()
             showAlertMessage("用户创建成功")
             await loadData()
         } catch {
+            clearCreateUserFields()
             showAlertMessage(error.localizedDescription)
         }
     }
@@ -417,8 +418,10 @@ struct SettingsView: View {
         do {
             let _ = try await APIClient.shared.resetPassword(username: resetUsername, newPassword: resetNewPassword)
             showResetPassword = false
+            clearResetPasswordFields()
             showAlertMessage("密码已重置")
         } catch {
+            clearResetPasswordFields()
             showAlertMessage(error.localizedDescription)
         }
     }
@@ -449,6 +452,16 @@ struct SettingsView: View {
         oldPassword = ""
         newPassword = ""
         confirmPassword = ""
+    }
+
+    private func clearCreateUserFields() {
+        newUsername = ""
+        newUserPassword = ""
+    }
+
+    private func clearResetPasswordFields() {
+        resetUsername = ""
+        resetNewPassword = ""
     }
 
     private func showAlertMessage(_ msg: String) {

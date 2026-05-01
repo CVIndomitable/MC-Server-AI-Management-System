@@ -64,6 +64,10 @@ struct StatusView: View {
                 }
             }
         }
+        .onChange(of: appState.serverId) { oldValue, newValue in
+            pollingTask?.cancel()
+            pollingTask = nil
+        }
         .onDisappear {
             pollingTask?.cancel()
             pollingTask = nil

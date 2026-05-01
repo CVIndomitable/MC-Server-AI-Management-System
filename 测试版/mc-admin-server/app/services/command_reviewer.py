@@ -191,7 +191,24 @@ class CommandReviewer:
     @staticmethod
     def _sanitize_user_input(user_input: str) -> str:
         """清洗用户输入，移除可能的prompt注入尝试"""
-        # 移除常见的prompt注入模式
+        import unicodedata
+
+        # 1. Unicode规范化（NFKC）- 将变体字符转为标准形式
+        normalized = unicodedata.normalize('NFKC', user_input)
+
+        # 2. 移除零宽字符和其他不可见字符
+        zero_width_chars = [
+            '​',  # 零宽空格
+            '‌',  # 零宽非连接符
+            '‍',  # 零宽连接符
+            '‎',  # 左到右标记
+            '‏',  # 右到左标记
+            '﻿',  # 零宽非断空格
+        ]
+        for char in zero_width_chars:
+            normalized = normalized.replace(char, '')
+
+        # 3. 移除常见的prompt注入模式
         dangerous_patterns = [
             r'(?i)(ignore|disregard|forget)\s+(previous|above|all|the)\s+(instructions?|prompts?|rules?)',
             r'(?i)you\s+are\s+(now|a|an)\s+',
@@ -203,7 +220,7 @@ class CommandReviewer:
             r'(?i)<\s*/?user\s*>',
         ]
 
-        cleaned = user_input
+        cleaned = normalized
         for pattern in dangerous_patterns:
             cleaned = re.sub(pattern, '[已过滤]', cleaned)
 

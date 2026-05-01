@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     redis_host: str = "localhost"
     redis_port: int = 6379
     redis_db: int = 0
+    redis_password: str = ""  # Redis密码，生产环境必须设置
 
     mod_auth_token: str
 

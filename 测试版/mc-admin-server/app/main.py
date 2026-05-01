@@ -12,6 +12,7 @@ from app.services.command_reviewer import command_reviewer
 from app.services.ai_agent import ai_agent
 from app.services.ai_client import provider_pool
 from app.websocket.manager import manager
+from app.utils.rate_limiter import rate_limiter
 from config.settings import settings
 import logging
 
@@ -46,13 +47,14 @@ async def lifespan(app: FastAPI):
 
     # 启动：初始化记忆服务和后台整理任务
     try:
+        await rate_limiter.init()
         await memory_service.init()
         await command_cache.init()
         await command_reviewer.init()
         await memory_consolidator.start(
             get_conversation_fn=lambda admin_id, server_id: ai_agent.conversation_history.get((admin_id, server_id), [])
         )
-        logger.info("记忆系统 + 命令缓存 + 命令审核已启动")
+        logger.info("速率限制器 + 记忆系统 + 命令缓存 + 命令审核已启动")
     except Exception as e:
         logger.warning(f"记忆系统启动失败（Redis 可能未运行）: {e}")
 
@@ -67,6 +69,7 @@ async def lifespan(app: FastAPI):
     await command_reviewer.close()
     await command_cache.close()
     await memory_service.close()
+    await rate_limiter.close()
     await provider_pool.close()
 
 
@@ -107,8 +110,8 @@ async def root():
 async def health():
     checks = {"api": "ok"}
     try:
-        if memory_service._redis:
-            await memory_service._redis.ping()
+        if rate_limiter.redis_client:
+            await rate_limiter.redis_client.ping()
             checks["redis"] = "ok"
         else:
             checks["redis"] = "not_initialized"

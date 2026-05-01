@@ -134,7 +134,12 @@ struct LoginView: View {
             }
 
             Button {
-                Task { await appState.login(username: username, password: password) }
+                Task {
+                    let success = await appState.login(username: username, password: password)
+                    if success {
+                        password = ""
+                    }
+                }
             } label: {
                 HStack {
                     if appState.isLoading {

@@ -117,31 +117,31 @@ final class WebSocketManager {
             return
         }
 
-        switch type {
-        case "auth_success", "auth_response":
-            isAuthenticated = true
-            authTimeoutTask?.cancel()
-            reconnectAttempts = 0
-            setConnected(true)
+        Task { @MainActor in
+            switch type {
+            case "auth_success", "auth_response":
+                self.isAuthenticated = true
+                self.authTimeoutTask?.cancel()
+                self.reconnectAttempts = 0
+                self.setConnected(true)
 
-        case "auth_failed":
-            disconnect()
+            case "auth_failed":
+                self.disconnect()
 
-        case "status":
-            if let statusData = json["data"] as? [String: Any] {
-                parseStatus(json: statusData, serverId: json["server_id"] as? String ?? serverId ?? "")
-            }
-
-        case "chat_response":
-            if let msg = json["message"] as? String {
-                let callback = self.onChatResponse
-                Task { @MainActor in
-                    callback?(msg)
+            case "status":
+                if let statusData = json["data"] as? [String: Any],
+                   let sid = json["server_id"] as? String ?? self.serverId {
+                    self.parseStatus(json: statusData, serverId: sid)
                 }
-            }
 
-        default:
-            break
+            case "chat_response":
+                if let msg = json["message"] as? String {
+                    self.onChatResponse?(msg)
+                }
+
+            default:
+                break
+            }
         }
     }
 

@@ -5,39 +5,40 @@ from app.models.schemas import (
 )
 from app.core.auth import create_access_token, verify_token
 from app.core.database import user_db
-from collections import defaultdict
-import time
+from app.utils.rate_limiter import rate_limiter
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
-# 登录频率限制
-# 同时限制 per-IP 与 per-username，代理场景下单一 IP 仍无法对全库用户暴破
-_login_attempts: dict[str, list[float]] = defaultdict(list)
+# 登录频率限制配置
 _LOGIN_RATE_LIMIT_IP = 30        # 单一 IP 每分钟 30 次（容忍代理/NAT）
 _LOGIN_RATE_LIMIT_USER = 5       # 单一用户名每分钟 5 次
 _LOGIN_RATE_WINDOW = 60
 
 
-def _check_login_rate(request: Request, username: str):
+async def _check_login_rate(request: Request, username: str):
+    """检查登录速率限制（基于Redis的分布式限流）"""
     client_ip = request.client.host if request.client else "unknown"
-    now = time.time()
-    for key, limit in (
-        (f"ip:{client_ip}", _LOGIN_RATE_LIMIT_IP),
-        (f"user:{username.lower()}", _LOGIN_RATE_LIMIT_USER),
-    ):
-        _login_attempts[key] = [t for t in _login_attempts[key] if now - t < _LOGIN_RATE_WINDOW]
-        if len(_login_attempts[key]) >= limit:
-            raise HTTPException(status_code=429, detail="登录尝试过于频繁，请稍后再试")
-        _login_attempts[key].append(now)
+
+    # 同时限制 per-IP 与 per-username，代理场景下单一 IP 仍无法对全库用户暴破
+    await rate_limiter.check_rate(
+        f"login:ip:{client_ip}",
+        _LOGIN_RATE_LIMIT_IP,
+        _LOGIN_RATE_WINDOW
+    )
+    await rate_limiter.check_rate(
+        f"login:user:{username.lower()}",
+        _LOGIN_RATE_LIMIT_USER,
+        _LOGIN_RATE_WINDOW
+    )
 
 
 @router.post("/login", response_model=Token)
 async def login(request: LoginRequest, http_request: Request):
     """用户登录"""
-    _check_login_rate(http_request, request.username)
+    await _check_login_rate(http_request, request.username)
     client_ip = http_request.client.host if http_request.client else "unknown"
     user = await user_db.authenticate(request.username, request.password)
     if not user:

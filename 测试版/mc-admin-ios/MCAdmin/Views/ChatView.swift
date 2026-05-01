@@ -308,11 +308,7 @@ struct ReviewCard: View {
 
     private func startCountdown() {
         countdownTimer?.invalidate()
-        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
-            guard let self else {
-                timer.invalidate()
-                return
-            }
+        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { timer in
             if self.remainingSeconds > 0 {
                 self.remainingSeconds -= 1
             } else {
