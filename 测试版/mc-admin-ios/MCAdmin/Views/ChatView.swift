@@ -138,8 +138,13 @@ struct ChatView: View {
             } else {
                 // 发送按钮
                 Button {
-                    let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    var text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !text.isEmpty else { return }
+
+                    if text.count > 4000 {
+                        text = String(text.prefix(4000))
+                    }
+
                     inputText = ""
                     isInputFocused = false
                     appState.startChat(text)
@@ -215,6 +220,7 @@ struct ReviewCard: View {
     let onConfirm: (String, String) -> Void
 
     @State private var remainingSeconds: Int
+    @State private var countdownTimer: Timer?
 
     init(review: ReviewInfo, onConfirm: @escaping (String, String) -> Void) {
         self.review = review
@@ -289,6 +295,7 @@ struct ReviewCard: View {
         )
         .cornerRadius(12)
         .onAppear { startCountdown() }
+        .onDisappear { stopCountdown() }
     }
 
     private var riskColor: Color {
@@ -300,13 +307,24 @@ struct ReviewCard: View {
     }
 
     private func startCountdown() {
-        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { timer in
-            if remainingSeconds > 0 {
-                remainingSeconds -= 1
+        countdownTimer?.invalidate()
+        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] timer in
+            guard let self else {
+                timer.invalidate()
+                return
+            }
+            if self.remainingSeconds > 0 {
+                self.remainingSeconds -= 1
             } else {
                 timer.invalidate()
+                self.countdownTimer = nil
             }
         }
+    }
+
+    private func stopCountdown() {
+        countdownTimer?.invalidate()
+        countdownTimer = nil
     }
 }
 

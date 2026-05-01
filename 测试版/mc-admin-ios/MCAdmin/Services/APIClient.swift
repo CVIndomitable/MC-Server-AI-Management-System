@@ -230,7 +230,6 @@ actor APIClient {
 
     /// 触发 AI 分析（启用扩展思考）。耗时较长，调用方应显示 loading。
     func analyzeSparkArchive(serverId: String, profileId: Int) async throws -> AnalyzeArchiveResponse {
-        // 分析需要较长时间（扩展思考），绕过默认 30s 超时
         let urlString = "\(baseURL)/api/v1/archive/spark/\(serverId)/\(profileId)/analyze"
         guard let url = URL(string: urlString) else { throw APIError.invalidResponse }
         var req = URLRequest(url: url)
@@ -239,13 +238,10 @@ actor APIClient {
         if let token = currentToken() {
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        // 分析最多 3 分钟
         req.timeoutInterval = 180
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 180
-        config.timeoutIntervalForResource = 180
-        let longSession = URLSession(configuration: config)
-        let (data, response) = try await longSession.data(for: req)
+
+        let (data, response) = try await session.data(for: req)
+
         guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
         switch http.statusCode {
         case 200..<300:

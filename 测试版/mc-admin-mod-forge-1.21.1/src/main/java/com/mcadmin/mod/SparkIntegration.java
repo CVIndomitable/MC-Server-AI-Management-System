@@ -11,8 +11,8 @@ import org.slf4j.LoggerFactory;
  */
 public class SparkIntegration {
     private static final Logger LOGGER = LoggerFactory.getLogger(SparkIntegration.class);
-    private static boolean available;
-    private static boolean checked = false;
+    private static volatile boolean available;
+    private static volatile boolean checked = false;
 
     /**
      * 延迟检测 Spark 是否可用（Spark 需要在服务器启动后才注册 API）
@@ -24,7 +24,7 @@ public class SparkIntegration {
                 // 尝试实际获取实例，确认 Spark 已完成初始化
                 SparkAccessor.test();
                 available = true;
-                LOGGER.info("Spark API detected and available");
+                LOGGER.debug("Spark API detected and available");
             } catch (ClassNotFoundException e) {
                 available = false;
                 LOGGER.info("Spark mod not installed, Spark integration disabled");
@@ -93,7 +93,7 @@ public class SparkIntegration {
                 tpsObj.addProperty("15m", round(tps.poll(me.lucko.spark.api.statistic.StatisticWindow.TicksPerSecond.MINUTES_15)));
                 data.add("tps", tpsObj);
             } catch (Exception e) {
-                // TPS 可能在客户端侧不可用
+                LOGGER.debug("Spark TPS collection failed: {}", e.getMessage());
             }
         }
 
@@ -123,7 +123,7 @@ public class SparkIntegration {
                 }
                 data.add("mspt", msptObj);
             } catch (Exception e) {
-                // MSPT 可能在客户端侧不可用
+                LOGGER.debug("Spark MSPT collection failed: {}", e.getMessage());
             }
         }
 
@@ -144,7 +144,7 @@ public class SparkIntegration {
                 }
                 data.add("cpu", cpuObj);
             } catch (Exception e) {
-                // 忽略
+                LOGGER.debug("Spark CPU collection failed: {}", e.getMessage());
             }
         }
 
@@ -162,7 +162,7 @@ public class SparkIntegration {
                 }
                 data.add("gc", gcObj);
             } catch (Exception e) {
-                // 忽略
+                LOGGER.debug("Spark GC collection failed: {}", e.getMessage());
             }
         }
 

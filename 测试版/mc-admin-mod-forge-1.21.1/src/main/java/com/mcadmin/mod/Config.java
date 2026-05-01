@@ -37,10 +37,28 @@ public class Config {
             LOGGER.info("Config loaded from {}", CONFIG_FILE);
             // 加载后也收紧权限，防止历史文件遗留宽松权限
             restrictPermissions(new File(CONFIG_FILE));
+            validateConfig();
         } catch (IOException e) {
             LOGGER.warn("Config file not found, using defaults");
             setDefaults();
             saveConfig();
+        }
+    }
+
+    private static void validateConfig() {
+        String wsUrl = getWsUrl();
+        if (!wsUrl.startsWith("ws://") && !wsUrl.startsWith("wss://")) {
+            LOGGER.error("Invalid ws.url: must start with ws:// or wss://, got: {}", wsUrl);
+        }
+
+        String token = getAuthToken();
+        if (token.equals("change-me-in-config-file")) {
+            LOGGER.warn("ws.token is still set to default value, please update config file");
+        }
+
+        long interval = getReportInterval();
+        if (interval < 1000 || interval > 60000) {
+            LOGGER.warn("status.report_interval out of recommended range (1000-60000ms): {}", interval);
         }
     }
 

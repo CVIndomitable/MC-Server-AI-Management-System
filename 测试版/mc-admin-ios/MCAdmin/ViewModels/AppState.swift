@@ -3,6 +3,7 @@ import SwiftUI
 
 // MARK: - 全局状态管理
 
+@MainActor
 @Observable
 final class AppState {
     // 认证状态
@@ -118,8 +119,13 @@ final class AppState {
             self.isAuthenticated = true
 
             // 持久化
-            KeychainService.save(key: KeychainService.tokenKey, value: token)
-            KeychainService.save(key: KeychainService.tokenKey(for: payload.sub), value: token)
+            let tokenSaved = KeychainService.save(key: KeychainService.tokenKey, value: token)
+            let accountTokenSaved = KeychainService.save(key: KeychainService.tokenKey(for: payload.sub), value: token)
+
+            if !tokenSaved || !accountTokenSaved {
+                print("⚠️ Failed to save credentials to Keychain")
+            }
+
             UserDefaults.standard.set(payload.sub, forKey: Keys.username)
             UserDefaults.standard.set(payload.role, forKey: Keys.role)
 
@@ -382,12 +388,18 @@ final class AppState {
 
     private func setupWSCallbacks() {
         wsManager.onStatusUpdate = { [weak self] status in
-            self?.serverStatus = status
+            guard let self else { return }
+            self.serverStatus = status
         }
 
         wsManager.onChatResponse = { [weak self] message in
+            guard let self else { return }
             let msg = ChatMessage.assistant(message)
-            self?.chatMessages.append(msg)
+            self.chatMessages.append(msg)
+
+            if self.chatMessages.count > 100 {
+                self.chatMessages = Array(self.chatMessages.suffix(100))
+            }
         }
     }
 }

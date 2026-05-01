@@ -20,7 +20,7 @@ public class WebSocketManager {
     private static final long MAX_RECONNECT_DELAY = 60000;
     private static final long HEARTBEAT_INTERVAL = 30000;
     private static final int MAX_MESSAGE_SIZE = 1024 * 1024; // 1MB消息大小限制
-    private static final int MAX_RECONNECT_ATTEMPTS = 50; // 最大重连次数（约30分钟后放弃）
+    private static final long RECONNECT_RESET_THRESHOLD = 300000; // 5分钟成功连接后重置计数器
 
     private volatile WebSocket webSocket;
     private final CommandExecutor commandExecutor;
@@ -31,6 +31,7 @@ public class WebSocketManager {
     private final HttpClient httpClient;
     private volatile long currentReconnectDelay = INITIAL_RECONNECT_DELAY;
     private volatile int reconnectAttempts = 0;
+    private volatile long lastSuccessfulConnectionTime = 0;
 
     // 用 ScheduledExecutorService 代替 Timer，避免资源泄漏
     private final ScheduledExecutorService scheduler =
@@ -76,6 +77,7 @@ public class WebSocketManager {
                         webSocket = ws;
                         connected.set(true);
                         currentReconnectDelay = INITIAL_RECONNECT_DELAY;
+                        lastSuccessfulConnectionTime = System.currentTimeMillis();
                         reconnectAttempts = 0;
                         startHeartbeat();
                         ws.request(1);
@@ -278,11 +280,16 @@ public class WebSocketManager {
     private void scheduleReconnect() {
         if (!shouldReconnect.get()) return;
 
-        reconnectAttempts++;
-        if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
-            LOGGER.error("Max reconnect attempts ({}) reached, giving up. Restart the server to retry.", MAX_RECONNECT_ATTEMPTS);
-            return;
+        // 如果连续成功运行超过5分钟，重置重连计数器（防止间歇性故障时频繁重连）
+        long now = System.currentTimeMillis();
+        if (lastSuccessfulConnectionTime > 0 && connected.get() &&
+            (now - lastSuccessfulConnectionTime) > RECONNECT_RESET_THRESHOLD) {
+            LOGGER.info("Connection stable for over 5 minutes, resetting reconnect counter");
+            reconnectAttempts = 0;
+            currentReconnectDelay = INITIAL_RECONNECT_DELAY;
         }
+
+        reconnectAttempts++;
 
         // 取消现有重连任务
         ScheduledFuture<?> existing = reconnectFuture;
@@ -291,7 +298,7 @@ public class WebSocketManager {
         }
 
         long delay = currentReconnectDelay;
-        LOGGER.info("Scheduling reconnect in {} ms (attempt {}/{})", delay, reconnectAttempts, MAX_RECONNECT_ATTEMPTS);
+        LOGGER.info("Scheduling reconnect in {} ms (attempt {})", delay, reconnectAttempts);
         reconnectFuture = scheduler.schedule(() -> {
             if (shouldReconnect.get()) {
                 LOGGER.info("Attempting to reconnect...");

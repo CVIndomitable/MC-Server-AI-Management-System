@@ -127,7 +127,7 @@ public class CommandExecutor {
     }
 
     private static final int MAX_COMMAND_LENGTH = 32768;
-    private static final int MAX_RECURSION_DEPTH = 5;
+    private static final int MAX_RECURSION_DEPTH = 10;
 
     /**
      * 递归检查命令是否在白名单中，包括 /execute ... run 嵌套的子命令
@@ -356,18 +356,31 @@ public class CommandExecutor {
             }
 
             LOGGER.warn("Server restart requested - executing restart script: {}", restartScript);
-            callback.accept(true, "Server restarting via script");
 
             try {
                 // 直接执行脚本文件，不通过shell解释器，防止命令注入
-                new ProcessBuilder(scriptFile.getCanonicalPath())
+                Process process = new ProcessBuilder(scriptFile.getCanonicalPath())
                     .inheritIO()
                     .start();
+
+                // 等待脚本启动确认（最多2秒），失败则取消停服
+                boolean started = process.waitFor(2, java.util.concurrent.TimeUnit.SECONDS);
+                if (!started || process.exitValue() != 0) {
+                    LOGGER.error("Restart script failed to start or exited with error");
+                    callback.accept(false, "Restart script execution failed");
+                    return;
+                }
+
+                callback.accept(true, "Server restarting via script");
+                server.execute(() -> server.halt(false));
             } catch (IOException e) {
                 LOGGER.error("Failed to execute restart script", e);
+                callback.accept(false, "Failed to execute restart script: " + e.getMessage());
+            } catch (InterruptedException e) {
+                LOGGER.error("Restart script wait interrupted", e);
+                callback.accept(false, "Restart script wait interrupted");
+                Thread.currentThread().interrupt();
             }
-
-            server.execute(() -> server.halt(false));
         } else {
             // 无重启脚本：写标志文件 + 停止（外部 watchdog/systemd 可据此自动重启）
             LOGGER.warn("Server restart requested - writing restart flag and stopping");

@@ -1,12 +1,14 @@
 package com.mcadmin.mod;
 
 import com.mcadmin.mod.ai.AiChatBridge;
+import com.mcadmin.mod.ai.AiSessionManager;
 import com.mcadmin.mod.commands.AiCommand;
 import com.mcadmin.mod.events.ChatInterceptor;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import org.slf4j.Logger;
@@ -31,6 +33,7 @@ public class MCAdminMod {
         NeoForge.EVENT_BUS.addListener(this::onServerStarted);
         NeoForge.EVENT_BUS.addListener(this::onServerStopping);
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
+        NeoForge.EVENT_BUS.addListener(this::onPlayerLogout);
 
         LOGGER.info("MC Admin Mod initialized");
     }
@@ -97,6 +100,16 @@ public class MCAdminMod {
 
     private void onRegisterCommands(RegisterCommandsEvent event) {
         AiCommand.register(event.getDispatcher());
+    }
+
+    private void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
+        // 清理玩家的 AI 会话和速率限制记录，防止内存泄漏
+        java.util.UUID playerId = event.getEntity().getUUID();
+        AiSessionManager.remove(playerId);
+        if (aiChatBridge != null) {
+            aiChatBridge.cleanupPlayer(playerId);
+        }
+        LOGGER.debug("Cleaned up AI session for player: {}", event.getEntity().getName().getString());
     }
 
     public static MCAdminMod getInstance() {

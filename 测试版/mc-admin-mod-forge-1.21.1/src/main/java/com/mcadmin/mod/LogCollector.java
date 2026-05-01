@@ -27,11 +27,14 @@ public class LogCollector extends AbstractAppender {
             return;
         }
         String loggerName = event.getLoggerName();
-        // 包名前缀过滤（快速路径）
-        if (loggerName != null && loggerName.startsWith("com.mcadmin")) {
+        // 白名单机制：只收集 MC 核心和 NeoForge 的日志，避免递归风险
+        if (loggerName == null ||
+            (!loggerName.startsWith("net.minecraft") &&
+             !loggerName.startsWith("net.neoforged") &&
+             !loggerName.startsWith("com.mojang"))) {
             return;
         }
-        // 重入保护：即使日志来自非 com.mcadmin 记录器，只要当前线程已在 append 栈内就丢弃
+        // 重入保护：即使日志来自白名单记录器，只要当前线程已在 append 栈内就丢弃
         if (IN_APPEND.get()) {
             return;
         }

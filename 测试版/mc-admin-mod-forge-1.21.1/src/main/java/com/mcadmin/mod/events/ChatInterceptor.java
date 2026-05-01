@@ -23,11 +23,10 @@ public class ChatInterceptor {
         AiSession session = AiSessionManager.getIfExists(player.getUUID());
         if (session == null || !session.isChatModeActive()) return;
 
-        // 以 "!" 开头允许绕过 AI 转发，照常在聊天框发言
+        // 以 "!" 开头允许绕过 AI 转发，保留前缀照常在聊天框发言
         String raw = event.getRawText();
         if (raw == null) return;
         if (raw.startsWith("!")) {
-            // 去掉前缀，按普通聊天处理
             return;
         }
 

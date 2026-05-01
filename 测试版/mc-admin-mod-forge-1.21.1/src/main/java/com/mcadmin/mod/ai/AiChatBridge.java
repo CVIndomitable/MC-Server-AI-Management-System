@@ -24,12 +24,16 @@ import java.util.concurrent.TimeUnit;
 public class AiChatBridge {
     private static final Logger LOGGER = LoggerFactory.getLogger(AiChatBridge.class);
     private static final long REQUEST_TIMEOUT_MS = 60_000;
+    private static final int RATE_LIMIT_MESSAGES = 10;  // 每分钟最多10条消息
+    private static final long RATE_LIMIT_WINDOW_MS = 60_000;  // 1分钟窗口
 
     private record Pending(UUID playerId, long sentAtMs) {}
+    private record RateLimitEntry(int count, long windowStartMs) {}
 
     private final MinecraftServer server;
     private final WebSocketManager ws;
     private final Map<String, Pending> pending = new ConcurrentHashMap<>();
+    private final Map<UUID, RateLimitEntry> rateLimits = new ConcurrentHashMap<>();
     private final ScheduledExecutorService timeoutScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "MCAdmin-AiChatTimeout");
         t.setDaemon(true);
@@ -40,9 +44,45 @@ public class AiChatBridge {
         this.server = server;
         this.ws = ws;
         timeoutScheduler.scheduleWithFixedDelay(this::sweepTimeouts, 30, 30, TimeUnit.SECONDS);
+        timeoutScheduler.scheduleWithFixedDelay(this::cleanupRateLimits, 60, 60, TimeUnit.SECONDS);
+    }
+
+    private boolean checkRateLimit(ServerPlayer player) {
+        UUID playerId = player.getUUID();
+        long now = System.currentTimeMillis();
+
+        RateLimitEntry entry = rateLimits.compute(playerId, (k, v) -> {
+            if (v == null || now - v.windowStartMs >= RATE_LIMIT_WINDOW_MS) {
+                return new RateLimitEntry(1, now);
+            } else {
+                return new RateLimitEntry(v.count + 1, v.windowStartMs);
+            }
+        });
+
+        if (entry.count > RATE_LIMIT_MESSAGES) {
+            long remainingMs = RATE_LIMIT_WINDOW_MS - (now - entry.windowStartMs);
+            whisper(player, Component.literal("[AI] 消息发送过快，请等待 " + (remainingMs / 1000) + " 秒后再试")
+                .withStyle(ChatFormatting.RED));
+            return false;
+        }
+        return true;
+    }
+
+    private void cleanupRateLimits() {
+        long now = System.currentTimeMillis();
+        rateLimits.entrySet().removeIf(e -> now - e.getValue().windowStartMs >= RATE_LIMIT_WINDOW_MS);
+    }
+
+    public void cleanupPlayer(UUID playerId) {
+        rateLimits.remove(playerId);
     }
 
     public void sendChat(ServerPlayer player, String message) {
+        // 速率限制检查
+        if (!checkRateLimit(player)) {
+            return;
+        }
+
         AiSession session = AiSessionManager.get(player.getUUID());
         String requestId = "ai_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
 
