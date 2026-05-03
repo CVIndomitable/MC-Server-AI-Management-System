@@ -1,8 +1,8 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException
 from typing import Optional
-from app.websocket.manager import manager
+from app.websocket.manager import manager, client_manager
 from app.websocket.chat_manager import chat_manager
-from app.services.ai_agent import ai_agent
+from app.services.ai_agent import ai_agent, CLIENT_ASSISTANT_PROMPT
 from app.services.memory import memory_service
 from app.services.command_reviewer import command_reviewer
 from app.services.spark_archive import capture_execute_command
@@ -28,6 +28,15 @@ _MAX_WS_MESSAGE_SIZE = 100 * 1024
 
 # 合法的消息类型
 _VALID_MESSAGE_TYPES = {"status", "result", "ai_chat_request", "confirm_required", "ping"}
+
+# player_uuid 格式：标准UUID
+_VALID_PLAYER_UUID = re.compile(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
+
+# 客户端WebSocket合法消息类型
+_CLIENT_VALID_MESSAGE_TYPES = {"client_hello", "ai_chat_request", "ping"}
+
+# 客户端消息最大长度
+_CLIENT_MAX_MESSAGE_LEN = 4000
 
 
 @router.websocket("/ws/mod")
@@ -91,6 +100,127 @@ async def mod_websocket(
     except Exception as e:
         logger.error(f"WebSocket error for {server_id}: {e}", exc_info=True)
         await manager.disconnect(server_id)
+
+
+@router.websocket("/ws/client")
+async def client_websocket(websocket: WebSocket):
+    """
+    客户端AI聊天WebSocket端点（MC客户端模组直连）
+
+    协议：
+    1. 客户端连接时携带 Authorization: Bearer <token> 头
+    2. 客户端先发送 client_hello: {"type": "client_hello", "player_uuid": "...", "player_name": "..."}
+    3. 客户端发送 ai_chat_request: {"type": "ai_chat_request", "request_id": "...", "message": "...", "model_tier": "..."}
+    4. 服务端回复 ai_chat_response: {"type": "ai_chat_response", "request_id": "...", "message": "..."}
+    """
+    token = websocket.headers.get("authorization", "")
+    token = token.removeprefix("Bearer ").strip() if token else ""
+
+    try:
+        await client_manager.connect(websocket, "__pending__", token)
+    except Exception:
+        return
+
+    # 等待 client_hello 消息
+    try:
+        data = await websocket.receive_text()
+        hello = json.loads(data)
+    except (json.JSONDecodeError, WebSocketDisconnect):
+        await client_manager.disconnect("__pending__")
+        return
+
+    if not isinstance(hello, dict) or hello.get("type") != "client_hello":
+        await client_manager.disconnect("__pending__")
+        return
+
+    player_uuid = hello.get("player_uuid", "").strip()
+    player_name = hello.get("player_name", "Player").strip()[:16]
+    client_server_id = hello.get("server_id", "").strip()
+
+    if not _VALID_PLAYER_UUID.match(player_uuid):
+        await client_manager.disconnect("__pending__")
+        return
+
+    # 校验 server_id 格式（如果提供）
+    if client_server_id and not _VALID_SERVER_ID.match(client_server_id):
+        await client_manager.disconnect("__pending__")
+        return
+
+    # 用真实 player_uuid 重新注册
+    await client_manager.disconnect("__pending__")
+    if not await client_manager.connect(websocket, player_uuid, token):
+        return
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+
+            if len(data) > _MAX_WS_MESSAGE_SIZE:
+                await websocket.close(code=1009, reason="Message too big")
+                await client_manager.disconnect(player_uuid)
+                return
+
+            try:
+                message = json.loads(data)
+            except json.JSONDecodeError:
+                continue
+
+            if not isinstance(message, dict) or message.get("type") not in _CLIENT_VALID_MESSAGE_TYPES:
+                continue
+
+            msg_type = message["type"]
+
+            if msg_type == "ping":
+                await client_manager.send_message(player_uuid, {"type": "pong"})
+                continue
+
+            if msg_type == "ai_chat_request":
+                request_id = message.get("request_id", "")
+                user_message = message.get("message", "").strip()
+                model_tier = message.get("model_tier") or "flash"
+
+                if not request_id or not user_message:
+                    continue
+
+                if len(user_message) > _CLIENT_MAX_MESSAGE_LEN:
+                    user_message = user_message[:_CLIENT_MAX_MESSAGE_LEN]
+
+                # 使用 player_uuid 隔离会话，如果提供了 server_id 则进一步隔离
+                admin_id = f"client:{player_uuid}"
+                effective_server_id = f"{client_server_id}:client" if client_server_id else "client"
+
+                try:
+                    ai_response = await ai_agent.process_message(
+                        user_message,
+                        server_id=effective_server_id,
+                        current_status=None,
+                        query_only=True,
+                        model_tier=model_tier,
+                        admin_id=admin_id,
+                        system_prompt=CLIENT_ASSISTANT_PROMPT,
+                    )
+                except Exception as e:
+                    logger.error(f"客户端AI处理失败: {e}")
+                    await client_manager.send_message(player_uuid, {
+                        "type": "ai_chat_response",
+                        "request_id": request_id,
+                        "error": "AI处理失败，请稍后重试",
+                    })
+                    continue
+
+                text = ai_response.get("text", "") or "（AI未返回文本）"
+                await client_manager.send_message(player_uuid, {
+                    "type": "ai_chat_response",
+                    "request_id": request_id,
+                    "message": text,
+                })
+
+    except WebSocketDisconnect:
+        logger.info(f"客户端WS断开: {player_uuid}")
+        await client_manager.disconnect(player_uuid)
+    except Exception as e:
+        logger.error(f"客户端WS错误: {e}", exc_info=True)
+        await client_manager.disconnect(player_uuid)
 
 
 # MC玩家名仅允许字母、数字、下划线，长度1-16

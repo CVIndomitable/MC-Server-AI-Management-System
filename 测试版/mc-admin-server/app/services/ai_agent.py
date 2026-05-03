@@ -88,6 +88,23 @@ QUERY_ONLY_PROMPT_BASE = """你是一个Minecraft服务器管理助手，当前�
 请用中文回复，给出清晰的指令建议，但**绝对不要尝试调用任何工具**。
 如果用户提供了当前服务器状态，你可以基于状态数据进行分析和建议。"""
 
+CLIENT_ASSISTANT_PROMPT = """你是一个Minecraft游戏助手，直接与玩家在游戏内对话。
+
+你的身份是友好的AI伙伴，帮助玩家解决游戏中的问题。你**无法执行任何服务器指令** — 你只能提供建议、信息和帮助。
+
+你可以帮助玩家：
+- 解答Minecraft游戏机制问题（合成、红石、附魔、生物等）
+- 提供方块用途、物品配方等信息
+- 建议游戏策略和技巧
+- 解答技术问题（指令用法、红石电路、农场设计等）
+- 版本特性查询（1.21.1相关机制）
+
+回复要求：
+- 用中文回复，风格友好、有帮助、带点Minecraft趣味
+- 保持回复简洁，多用短段落便于在游戏中阅读
+- 如果玩家询问需要服务器管理员权限的操作，礼貌告知需要联系管理员
+- 每轮回复建议不超过200字"""
+
 # 模型路由关键词
 PRO_KEYWORDS = re.compile(
     r"分析原因|诊断|排查|崩溃|全面检查|深度|优化方案|性能调优"
@@ -256,7 +273,7 @@ class AIAgent:
         # 检查总内存使用量
         self._enforce_memory_limit()
 
-    async def process_message(self, user_message: str, server_id: str, current_status: dict = None, query_only: bool = False, model_tier: Optional[str] = None, admin_id: str = "admin") -> Dict[str, Any]:
+    async def process_message(self, user_message: str, server_id: str, current_status: dict = None, query_only: bool = False, model_tier: Optional[str] = None, admin_id: str = "admin", system_prompt: str = None) -> Dict[str, Any]:
         hkey = (admin_id, server_id)
         if hkey not in self.conversation_history:
             self.conversation_history[hkey] = []
@@ -277,15 +294,35 @@ class AIAgent:
         self.conversation_history[hkey].append(user_msg)
         self._trim_history(hkey)
 
-        # ---- 命令缓存：仅缓存AI响应文本，不缓存工具调用（避免绕过审核） ----
-        cached_text = None
+        # ---- 命令缓存：完整缓存命中时直接返回，避免浪费API配额 ----
         if not query_only:
             try:
                 cached = await command_cache.get(user_message, server_id, user_id=admin_id)
                 if cached:
-                    # 仅使用缓存的文本响应，工具调用仍需重新生成和审核
-                    cached_text = cached.get("text", "")
-                    logger.info(f"[{server_id}] 缓存命中文本响应: '{user_message[:40]}'")
+                    logger.info(f"[{server_id}] 缓存命中，跳过大模型调用: '{user_message[:40]}'")
+                    # 重建 assistant_msg 并加入历史
+                    content_blocks = []
+                    if cached.get("text"):
+                        content_blocks.append({"type": "text", "text": cached["text"]})
+                    for tc in cached.get("tool_calls", []):
+                        content_blocks.append({
+                            "type": "tool_use",
+                            "id": tc["id"],
+                            "name": tc["name"],
+                            "input": tc["input"],
+                        })
+                    self.conversation_history[hkey].append({
+                        "role": "assistant",
+                        "content": content_blocks,
+                    })
+                    return {
+                        "text": cached.get("text", ""),
+                        "tool_calls": cached.get("tool_calls", []),
+                        "model_used": cached.get("model_used", "cache"),
+                        "provider_used": cached.get("provider_used", "cache"),
+                        "degraded": False,
+                        "cache_hit": True,
+                    }
             except Exception as e:
                 logger.warning(f"缓存查询失败，跳过: {e}")
 
@@ -293,13 +330,16 @@ class AIAgent:
         model = self._resolve_model(user_message, query_only, model_tier)
         logger.info(f"[{server_id}] 模型路由: {model} (tier={model_tier}, query_only={query_only}, msg_len={len(user_message)})")
 
-        base_prompt = QUERY_ONLY_PROMPT_BASE if query_only else SYSTEM_PROMPT_BASE
-        system_prompt = await self._build_system_prompt(base_prompt, admin_id, server_id, user_message=user_message)
+        if system_prompt:
+            base_prompt = system_prompt
+        else:
+            base_prompt = QUERY_ONLY_PROMPT_BASE if query_only else SYSTEM_PROMPT_BASE
+        system_text = await self._build_system_prompt(base_prompt, admin_id, server_id, user_message=user_message)
 
         create_params = {
             "model": model,
             "max_tokens": 2048,
-            "system": system_prompt,
+            "system": system_text,
             "messages": self.conversation_history[hkey],
         }
         if not query_only:
@@ -348,6 +388,7 @@ class AIAgent:
         user_message: str,
         query_only: bool = False,
         model_tier: Optional[str] = None,
+        system_prompt: str = None,
     ) -> Dict[str, Any]:
         """工具执行完成后，让 AI 基于 tool_result 生成自然语言总结。
 
@@ -358,15 +399,18 @@ class AIAgent:
             return {"text": "", "degraded": False}
 
         model = self._resolve_model(user_message, query_only, model_tier)
-        base_prompt = QUERY_ONLY_PROMPT_BASE if query_only else SYSTEM_PROMPT_BASE
-        system_prompt = await self._build_system_prompt(
+        if system_prompt:
+            base_prompt = system_prompt
+        else:
+            base_prompt = QUERY_ONLY_PROMPT_BASE if query_only else SYSTEM_PROMPT_BASE
+        system_text = await self._build_system_prompt(
             base_prompt, admin_id, server_id, user_message=user_message
         )
 
         create_params = {
             "model": model,
             "max_tokens": 2048,
-            "system": system_prompt,
+            "system": system_text,
             "messages": self.conversation_history[hkey],
         }
 
@@ -441,6 +485,7 @@ class AIAgent:
         query_only: bool = False,
         model_tier: Optional[str] = None,
         admin_id: str = "admin",
+        system_prompt: str = None,
     ):
         """
         流式处理消息，yield 事件字典：
@@ -519,13 +564,16 @@ class AIAgent:
         model = self._resolve_model(user_message, query_only, model_tier)
         logger.info(f"[{server_id}] 流式模型路由: {model} (tier={model_tier}, query_only={query_only})")
 
-        base_prompt = QUERY_ONLY_PROMPT_BASE if query_only else SYSTEM_PROMPT_BASE
-        system_prompt = await self._build_system_prompt(base_prompt, admin_id, server_id, user_message=user_message)
+        if system_prompt:
+            base_prompt = system_prompt
+        else:
+            base_prompt = QUERY_ONLY_PROMPT_BASE if query_only else SYSTEM_PROMPT_BASE
+        system_text = await self._build_system_prompt(base_prompt, admin_id, server_id, user_message=user_message)
 
         create_params = {
             "model": model,
             "max_tokens": 2048,
-            "system": system_prompt,
+            "system": system_text,
             "messages": self.conversation_history[hkey],
         }
         if not query_only:

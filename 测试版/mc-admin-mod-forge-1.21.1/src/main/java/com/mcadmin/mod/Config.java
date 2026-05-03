@@ -185,4 +185,14 @@ public class Config {
     public static String getRestartScript() {
         return props.getProperty("server.restart_script", "").trim();
     }
+
+    /**
+     * 获取客户端WebSocket连接URL。
+     * 优先使用 ws.client_url 配置，否则从 ws.url 推导（/ws/mod → /ws/client）。
+     */
+    public static String getClientWsUrl() {
+        String explicit = props.getProperty("ws.client_url", "").trim();
+        if (!explicit.isEmpty()) return explicit;
+        return getWsUrl().replace("/ws/mod", "/ws/client");
+    }
 }

@@ -20,8 +20,6 @@ actor APIClient {
         KeychainService.load(key: KeychainService.tokenKey)
     }
 
-    /// 兼容旧调用点的空操作；真正的 token 始终从 Keychain 读取
-    func setToken(_ token: String?) {}
 
     // MARK: - 通用请求
 
@@ -29,7 +27,8 @@ actor APIClient {
         _ method: String,
         path: String,
         body: (any Encodable)? = nil,
-        query: [String: String]? = nil
+        query: [String: String]? = nil,
+        timeout: TimeInterval = 30
     ) async throws -> T {
         var urlString = "\(baseURL)\(path)"
 
@@ -50,6 +49,7 @@ actor APIClient {
 
         var request = URLRequest(url: url)
         request.httpMethod = method
+        request.timeoutInterval = timeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         if let token = currentToken() {
@@ -74,7 +74,10 @@ actor APIClient {
                 throw APIError.server("数据解析失败: \(decodingError.localizedDescription)")
             }
         case 401:
-            throw APIError.unauthorized
+            if let detail = try? JSONDecoder().decode(ValidationError.self, from: data) {
+                throw APIError.unauthorized(detail.detail)
+            }
+            throw APIError.unauthorized(nil)
         case 403:
             throw APIError.forbidden
         case 404:
@@ -230,31 +233,7 @@ actor APIClient {
 
     /// 触发 AI 分析（启用扩展思考）。耗时较长，调用方应显示 loading。
     func analyzeSparkArchive(serverId: String, profileId: Int) async throws -> AnalyzeArchiveResponse {
-        let urlString = "\(baseURL)/api/v1/archive/spark/\(serverId)/\(profileId)/analyze"
-        guard let url = URL(string: urlString) else { throw APIError.invalidResponse }
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let token = currentToken() {
-            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        req.timeoutInterval = 180
-
-        let (data, response) = try await session.data(for: req)
-
-        guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
-        switch http.statusCode {
-        case 200..<300:
-            return try JSONDecoder().decode(AnalyzeArchiveResponse.self, from: data)
-        case 401: throw APIError.unauthorized
-        case 403: throw APIError.forbidden
-        case 404: throw APIError.notFound
-        default:
-            if let msg = try? JSONDecoder().decode(ValidationError.self, from: data) {
-                throw APIError.server(msg.detail)
-            }
-            throw APIError.server("分析失败 (\(http.statusCode))")
-        }
+        try await request("POST", path: "/api/v1/archive/spark/\(serverId)/\(profileId)/analyze", timeout: 180)
     }
 
     func deleteSparkArchive(serverId: String, profileId: Int) async throws -> MessageResponse {
@@ -284,7 +263,7 @@ actor APIClient {
 
 enum APIError: LocalizedError {
     case invalidResponse
-    case unauthorized
+    case unauthorized(String?)
     case forbidden
     case notFound
     case validation(String)
@@ -293,7 +272,7 @@ enum APIError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidResponse: return "无效响应"
-        case .unauthorized: return "登录已过期，请重新登录"
+        case .unauthorized(let detail): return detail ?? "登录已过期，请重新登录"
         case .forbidden: return "没有权限执行此操作"
         case .notFound: return "资源不存在"
         case .validation(let msg): return msg

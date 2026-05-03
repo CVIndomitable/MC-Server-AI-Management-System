@@ -1,4 +1,5 @@
 {
   "key.categories.mcadmin": "MC Admin",
-  "key.mcadmin.toggle_tps_hud": "Toggle TPS/MSPT HUD"
+  "key.mcadmin.toggle_tps_hud": "Toggle TPS/MSPT HUD",
+  "key.mcadmin.open_ai_chat": "Open AI Chat"
 }

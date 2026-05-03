@@ -1,6 +1,7 @@
 package com.mcadmin.mod.client;
 
 import com.mcadmin.mod.MCAdminMod;
+import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -11,11 +12,14 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 
 public final class ClientEvents {
 
+    private static boolean wasInWorld = false;
+
     @EventBusSubscriber(modid = MCAdminMod.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
     public static class ModBus {
         @SubscribeEvent
         public static void onRegisterKeys(RegisterKeyMappingsEvent event) {
             event.register(KeyBindings.TOGGLE_TPS_HUD);
+            event.register(KeyBindings.OPEN_AI_CHAT);
         }
 
         @SubscribeEvent
@@ -31,8 +35,26 @@ public final class ClientEvents {
     public static class GameBus {
         @SubscribeEvent
         public static void onClientTick(ClientTickEvent.Post event) {
+            // TPS HUD
             while (KeyBindings.TOGGLE_TPS_HUD.consumeClick()) {
                 ClientState.toggleHud();
+            }
+
+            // AI Chat
+            Minecraft mc = Minecraft.getInstance();
+            boolean isInWorld = mc.player != null && mc.level != null;
+
+            if (isInWorld && !wasInWorld) {
+                ClientAiChat.getInstance().initialize();
+            } else if (!isInWorld && wasInWorld) {
+                ClientAiChat.getInstance().shutdown();
+            }
+            wasInWorld = isInWorld;
+
+            while (KeyBindings.OPEN_AI_CHAT.consumeClick()) {
+                if (mc.player != null) {
+                    mc.setScreen(new AiChatScreen());
+                }
             }
         }
     }

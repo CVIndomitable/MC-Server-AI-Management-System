@@ -11,6 +11,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# WebSocket 心跳超时时间（秒）
+HEARTBEAT_TIMEOUT = getattr(settings, 'ws_heartbeat_timeout', 60)
+
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, WebSocket] = {}
@@ -45,14 +48,14 @@ class ConnectionManager:
                 logger.error(f"连接清理出错: {e}")
 
     async def _remove_stale_connections(self):
-        """移除超过60秒无状态上报的连接"""
+        """移除超过心跳超时时间无状态上报的连接"""
         now = datetime.now()
         stale = []
         async with self._lock:
             for server_id, status in self.server_status.items():
                 if server_id in self.active_connections:
                     last_update = status.get("last_update")
-                    if last_update and (now - last_update).total_seconds() > 60:
+                    if last_update and (now - last_update).total_seconds() > HEARTBEAT_TIMEOUT:
                         stale.append(server_id)
         for server_id in stale:
             logger.warning(f"服务器 {server_id} 心跳超时，断开连接")
@@ -194,4 +197,53 @@ class ConnectionManager:
         async with self._lock:
             return server_id in self.active_connections
 
+class ClientConnectionManager:
+    """管理从Minecraft客户端（装了模组的玩家）发起的WebSocket连接"""
+
+    def __init__(self):
+        self.active_connections: Dict[str, WebSocket] = {}
+        self._lock = asyncio.Lock()
+
+    async def connect(self, websocket: WebSocket, player_uuid: str, token: str) -> bool:
+        client_ip = websocket.client.host if websocket.client else "unknown"
+
+        if not secrets.compare_digest(token or "", settings.mod_auth_token):
+            logger.warning(f"WS客户端 鉴权失败: player_uuid={player_uuid} ip={client_ip}")
+            await websocket.close(code=1008, reason="Invalid token")
+            return False
+
+        # 拒绝同一 player_uuid 的重复连接
+        async with self._lock:
+            if player_uuid in self.active_connections:
+                existing = self.active_connections[player_uuid]
+                try:
+                    await existing.close(code=1008, reason="Duplicate connection")
+                except Exception:
+                    pass
+
+        await websocket.accept()
+        async with self._lock:
+            self.active_connections[player_uuid] = websocket
+        logger.info(f"Client {player_uuid} connected from {client_ip}")
+        return True
+
+    async def disconnect(self, player_uuid: str):
+        async with self._lock:
+            if player_uuid in self.active_connections:
+                del self.active_connections[player_uuid]
+        logger.info(f"Client {player_uuid} disconnected")
+
+    async def send_message(self, player_uuid: str, message: dict) -> bool:
+        async with self._lock:
+            ws = self.active_connections.get(player_uuid)
+        if ws is None:
+            return False
+        try:
+            await ws.send_text(json.dumps(message))
+            return True
+        except Exception as e:
+            logger.error(f"send_message 发送失败 client={player_uuid}: {e}")
+            return False
+
 manager = ConnectionManager()
+client_manager = ClientConnectionManager()
