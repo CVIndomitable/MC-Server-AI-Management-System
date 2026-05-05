@@ -27,6 +27,9 @@ final class AppState {
 
     // UI状态
     var isLoading = false
+    var isThinking = false       // AI 正在思考/生成文本
+    var isExecutingTool = false  // 正在执行工具
+    var currentTool: ToolExecutingStatus?  // 当前执行的工具
     var error: String?
     var queryOnlyMode = false
     var modelTier: ModelTier?
@@ -86,7 +89,6 @@ final class AppState {
             modelTier = ModelTier(rawValue: tierStr)
         }
 
-        await APIClient.shared.setToken(savedToken)
         isAuthenticated = true
 
         // 恢复服务器选择
@@ -129,8 +131,6 @@ final class AppState {
             UserDefaults.standard.set(payload.sub, forKey: Keys.username)
             UserDefaults.standard.set(payload.role, forKey: Keys.role)
 
-            await APIClient.shared.setToken(token)
-
             // 保存账号
             await saveAccount(username: payload.sub)
 
@@ -167,7 +167,6 @@ final class AppState {
         UserDefaults.standard.set(payload.sub, forKey: Keys.username)
         UserDefaults.standard.set(payload.role, forKey: Keys.role)
 
-        await APIClient.shared.setToken(savedToken)
         await saveAccount(username: payload.sub)
 
         isLoading = false
@@ -290,6 +289,9 @@ final class AppState {
         currentChatTask?.cancel()
         currentChatTask = nil
         isLoading = false
+        isThinking = false
+        isExecutingTool = false
+        currentTool = nil
     }
 
     func sendMessage(_ content: String) async {
@@ -304,7 +306,123 @@ final class AppState {
         }
 
         isLoading = true
+        isThinking = true
 
+        // 创建占位 assistant 消息，流式更新其 content
+        let assistantId = UUID().uuidString
+        let placeholder = ChatMessage(id: assistantId, role: "assistant", content: "", timestamp: Date().timeIntervalSince1970 * 1000)
+        chatMessages.append(placeholder)
+
+        do {
+            var components = URLComponents(string: "\(APIClient.shared.baseURL)/api/v1/chat/stream")
+            components?.queryItems = [
+                URLQueryItem(name: "message", value: content),
+                URLQueryItem(name: "server_id", value: serverId),
+                URLQueryItem(name: "query_only", value: queryOnlyMode ? "true" : "false"),
+            ]
+            if let tier = modelTier?.rawValue {
+                components?.queryItems?.append(URLQueryItem(name: "model_tier", value: tier))
+            }
+
+            guard let url = components?.url else {
+                // 回退到 REST API
+                await _sendMessageRest(content, assistantId: assistantId)
+                return
+            }
+
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 60
+            if let token = KeychainService.load(key: KeychainService.tokenKey) {
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+
+            let (bytes, response) = try await URLSession.shared.bytes(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                // 非 200 回退 REST
+                await _sendMessageRest(content, assistantId: assistantId)
+                return
+            }
+
+            var currentText = ""
+            var currentEvent = ""
+            var currentData = ""
+
+            for try await line in bytes.lines {
+                guard !Task.isCancelled else { break }
+
+                if line.hasPrefix("event: ") {
+                    currentEvent = String(line.dropFirst(7))
+                } else if line.hasPrefix("data: ") {
+                    currentData = String(line.dropFirst(6))
+                } else if line.isEmpty, !currentEvent.isEmpty,
+                          let data = currentData.data(using: .utf8),
+                          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+
+                    switch currentEvent {
+                    case "text_delta":
+                        if let text = json["text"] as? String {
+                            currentText += text
+                            _updateMessage(id: assistantId, text: currentText)
+                        }
+                        if isThinking {
+                            isThinking = false
+                        }
+                    case "tool_start":
+                        isExecutingTool = true
+                        isThinking = false
+                        currentTool = ToolExecutingStatus(
+                            id: json["id"] as? String ?? "",
+                            tool: json["tool"] as? String ?? "",
+                            label: json["label"] as? String ?? "",
+                            startedAt: Date()
+                        )
+                    case "tool_end":
+                        isExecutingTool = false
+                        currentTool = nil
+                        // 工具执行完，AI 将开始总结，恢复思考中状态
+                        isThinking = true
+                    case "done":
+                        _updateMessage(id: assistantId, text: currentText)
+                        isThinking = false
+                        isExecutingTool = false
+                        currentTool = nil
+                    case "error":
+                        let errText = json["error"] as? String ?? "未知错误"
+                        _updateMessage(id: assistantId, text: "AI处理失败: \(errText)")
+                        isThinking = false
+                        isExecutingTool = false
+                        currentTool = nil
+                    default:
+                        break
+                    }
+                    currentEvent = ""
+                    currentData = ""
+                }
+            }
+
+            // 如果流结束但没收到任何文本，回退 REST
+            if currentText.isEmpty {
+                await _sendMessageRest(content, assistantId: assistantId)
+            }
+        } catch is CancellationError {
+            removeMessage(id: assistantId)
+        } catch let error as URLError where error.code == .cancelled {
+            removeMessage(id: assistantId)
+        } catch {
+            if !Task.isCancelled {
+                // 流式失败，回退到 REST
+                removeMessage(id: assistantId)
+                await _sendMessageRest(content, assistantId: assistantId)
+            }
+        }
+
+        isLoading = false
+        currentChatTask = nil
+    }
+
+    /// REST 回退：旧版一次性请求
+    private func _sendMessageRest(_ content: String, assistantId: String) async {
         do {
             let response = try await APIClient.shared.sendChat(
                 message: content,
@@ -312,7 +430,6 @@ final class AppState {
                 queryOnly: queryOnlyMode,
                 modelTier: modelTier?.rawValue
             )
-
             guard !Task.isCancelled else { return }
 
             var text = response.message.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -322,23 +439,29 @@ final class AppState {
             if response.degraded == true, let warn = response.degraded_message, !warn.isEmpty {
                 text = "⚠️ \(warn)\n\n\(text)"
             }
-            if !text.isEmpty || response.review != nil {
-                let assistantMsg = ChatMessage.assistant(text, review: response.review)
-                chatMessages.append(assistantMsg)
-            }
+            _updateMessage(id: assistantId, text: text, review: response.review)
         } catch is CancellationError {
-            // 用户取消，不显示错误
+            removeMessage(id: assistantId)
         } catch let error as URLError where error.code == .cancelled {
-            // URL请求被取消
+            removeMessage(id: assistantId)
         } catch {
             if !Task.isCancelled {
-                let errorMsg = ChatMessage.assistant("请求失败: \(error.localizedDescription)")
-                chatMessages.append(errorMsg)
+                _updateMessage(id: assistantId, text: "请求失败: \(error.localizedDescription)")
             }
         }
+    }
 
-        isLoading = false
-        currentChatTask = nil
+    /// 更新指定ID的 assistant 消息
+    private func _updateMessage(id: String, text: String, review: ReviewInfo? = nil) {
+        guard let index = chatMessages.lastIndex(where: { $0.id == id }) else { return }
+        chatMessages[index].content = text
+        if let review {
+            chatMessages[index].review = review
+        }
+    }
+
+    private func removeMessage(id: String) {
+        chatMessages.removeAll(where: { $0.id == id })
     }
 
     func confirmCommand(pendingId: String, action: String) async {
@@ -353,6 +476,22 @@ final class AppState {
             }
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+
+    // MARK: - 新对话
+
+    func clearConversation() async {
+        cancelChat()
+        chatMessages = []
+
+        guard !serverId.isEmpty else { return }
+
+        do {
+            _ = try await APIClient.shared.clearConversation(serverId: serverId)
+        } catch {
+            // 后端清除失败不影响本地清空
+            print("清除对话历史失败: \(error.localizedDescription)")
         }
     }
 

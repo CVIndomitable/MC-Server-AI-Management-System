@@ -5,7 +5,7 @@ import Foundation
 struct ChatMessage: Identifiable {
     let id: String
     let role: String // "user" | "assistant"
-    let content: String
+    var content: String  // 流式更新用 var
     let timestamp: TimeInterval
     var review: ReviewInfo?
 
@@ -71,6 +71,15 @@ struct ConfirmResponse: Codable {
     let message: String
     let output: String?
     let command: String?
+}
+
+// MARK: - 工具执行状态
+
+struct ToolExecutingStatus {
+    let id: String
+    let tool: String
+    let label: String
+    let startedAt: Date
 }
 
 // MARK: - 模型等级

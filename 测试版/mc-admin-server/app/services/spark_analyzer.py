@@ -9,6 +9,7 @@ Spark profiler 报告分析器。
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 from typing import Optional
@@ -56,28 +57,43 @@ def _strip_html(text: str) -> str:
 
 
 async def fetch_profile_content(url: str) -> tuple[str, Optional[str]]:
-    """抓取 spark 报告页面。返回 (文本内容, 错误原因)。"""
+    """抓取 spark 报告页面。返回 (文本内容, 错误原因)。
+
+    Spark 报告页是 JS 动态渲染的 SPA，直接 GET 只能拿到空壳。
+    这里检测到 spark.lucko.me URL 时，自动改用其 JSON data API
+    (https://spark.lucko.me/data/{id}) 获取原始性能数据。
+    """
     if not url:
         return "", "URL 为空"
     try:
+        # 检测 spark URL，改用 JSON data API
+        spark_match = re.match(r"https?://spark\.lucko\.me/([A-Za-z0-9_\-]+)$", url.strip())
+        fetch_url = f"https://spark.lucko.me/data/{spark_match.group(1)}" if spark_match else url
+
         async with httpx.AsyncClient(
             follow_redirects=True,
             timeout=_FETCH_TIMEOUT,
             headers={
                 "User-Agent": "mc-admin-server spark-analyzer/1.0",
-                "Accept": "text/html,application/json,*/*",
+                "Accept": "application/json,text/html,*/*",
             },
         ) as client:
-            resp = await client.get(url)
+            resp = await client.get(fetch_url)
             if resp.status_code >= 400:
                 return "", f"抓取失败 HTTP {resp.status_code}"
-            # 限制大小
             content = resp.text
             if len(content.encode("utf-8", "ignore")) > _FETCH_MAX_BYTES:
                 content = content[:_FETCH_MAX_BYTES]
             content_type = resp.headers.get("content-type", "").lower()
             if "html" in content_type:
                 content = _strip_html(content)
+            elif "json" in content_type and spark_match:
+                # JSON 数据需要格式化后给 AI 解读
+                try:
+                    data = json.loads(content)
+                    content = json.dumps(data, ensure_ascii=False, indent=2)
+                except json.JSONDecodeError:
+                    pass  # 保持原文
             return content, None
     except httpx.TimeoutException:
         return "", "抓取超时"

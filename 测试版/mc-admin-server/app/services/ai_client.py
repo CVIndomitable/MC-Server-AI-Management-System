@@ -170,8 +170,8 @@ class ProviderPool:
                     params["model"] = mapped
             try:
                 stream = client.messages.stream(**params)
-                # 启动流
-                await stream.__aenter__()
+                # 启动流，__aenter__() 返回 AsyncMessageStream（可 async for）
+                stream = await stream.__aenter__()
                 degraded = idx > 0
                 if degraded:
                     logger.warning(

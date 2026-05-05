@@ -8,6 +8,107 @@ function generateId(): string {
 import { ServerStatus, ChatMessage, UserServerInfo, ServerInfo, ModelTier, SavedAccount, WSMessage } from '../types';
 import apiService, { setOnUnauthorized } from '../services/api';
 import wsService from '../services/websocket';
+import { API_BASE_URL } from '../utils/config';
+
+// ---- 流式聊天辅助函数 (浏览器 EventSource / ReadableStream) ----
+
+async function tryStreamChat(
+  content: string,
+  serverId: string,
+  queryOnly: boolean,
+  modelTier: ModelTier | undefined,
+  addChatMessage: (msg: ChatMessage) => void,
+  updateChatMessage: (id: string, content: string) => void,
+  getState: () => AppState,
+): Promise<boolean> {
+  // 创建占位消息
+  const placeholder: ChatMessage = {
+    id: generateId(),
+    role: 'assistant',
+    content: '',
+    timestamp: Date.now(),
+  };
+  addChatMessage(placeholder);
+
+  const token = getState().token;
+  const params = new URLSearchParams({
+    message: content,
+    server_id: serverId,
+    query_only: queryOnly ? 'true' : 'false',
+  });
+  if (modelTier) params.append('model_tier', modelTier);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/chat/stream?${params}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'text/event-stream',
+      },
+    });
+
+    if (!response.ok) return false;
+
+    // 浏览器 → 使用 ReadableStream
+    if (!response.body || typeof response.body.getReader !== 'function') {
+      return false;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let currentText = '';
+    let doneStream = false;
+
+    while (!doneStream) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      // 按 \n\n 分割 SSE 事件
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop() ?? ''; // 最后一段可能不完整
+
+      for (const block of parts) {
+        if (!block.trim()) continue;
+        const lines = block.split('\n');
+        let eventType = '';
+        let dataStr = '';
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) eventType = line.slice(7);
+          else if (line.startsWith('data: ')) dataStr = line.slice(6);
+        }
+
+        if (!eventType || !dataStr) continue;
+
+        try {
+          const data = JSON.parse(dataStr);
+
+          if (eventType === 'text_delta' && data.text) {
+            currentText += data.text;
+            updateChatMessage(placeholder.id, currentText);
+          } else if (eventType === 'done') {
+            doneStream = true;
+            break;
+          } else if (eventType === 'error') {
+            updateChatMessage(placeholder.id, `AI处理失败: ${data.error || '未知错误'}`);
+            doneStream = true;
+            break;
+          }
+        } catch {
+          // JSON 解析失败，忽略
+        }
+      }
+    }
+
+    return true;
+  } catch (err: any) {
+    if (err.name === 'AbortError') return true;
+    console.warn('流式聊天失败，回退 REST:', err?.message);
+    return false;
+  }
+}
 
 const TOKEN_KEY = '@mc_admin_token';
 const SERVER_ID_KEY = '@mc_admin_server_id';
@@ -330,6 +431,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
   },
 
+  updateChatMessage: (id: string, content: string) => {
+    set(state => ({
+      chatMessages: state.chatMessages.map(m => m.id === id ? { ...m, content } : m),
+    }));
+  },
+
   sendMessage: async (content: string) => {
     const { serverId, addChatMessage, queryOnlyMode, modelTier } = get();
 
@@ -343,34 +450,43 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     set({ isLoading: true });
 
-    const result = await apiService.sendChatMessage(content, serverId, queryOnlyMode, modelTier);
+    // 先尝试流式，需要浏览器环境（ReadableStream）
+    const streamed = await tryStreamChat(
+      content, serverId, queryOnlyMode, modelTier,
+      addChatMessage, get().updateChatMessage, get,
+    );
 
-    if (result.success && result.data) {
-      if (result.data.degraded && result.data.degraded_message) {
-        const noticeMessage: ChatMessage = {
+    if (!streamed) {
+      // 不支持流式 → 回退 REST
+      const result = await apiService.sendChatMessage(content, serverId, queryOnlyMode, modelTier);
+
+      if (result.success && result.data) {
+        if (result.data.degraded && result.data.degraded_message) {
+          const noticeMessage: ChatMessage = {
+            id: generateId(),
+            role: 'assistant',
+            content: `[提示] ${result.data.degraded_message}`,
+            timestamp: Date.now(),
+          };
+          addChatMessage(noticeMessage);
+        }
+        const aiMessage: ChatMessage = {
           id: generateId(),
           role: 'assistant',
-          content: `[提示] ${result.data.degraded_message}`,
+          content: result.data.message,
+          timestamp: Date.now(),
+          review: result.data.review,
+        };
+        addChatMessage(aiMessage);
+      } else {
+        const errorMessage: ChatMessage = {
+          id: generateId(),
+          role: 'assistant',
+          content: `错误: ${result.error}`,
           timestamp: Date.now(),
         };
-        addChatMessage(noticeMessage);
+        addChatMessage(errorMessage);
       }
-      const aiMessage: ChatMessage = {
-        id: generateId(),
-        role: 'assistant',
-        content: result.data.message,
-        timestamp: Date.now(),
-        review: result.data.review,
-      };
-      addChatMessage(aiMessage);
-    } else {
-      const errorMessage: ChatMessage = {
-        id: generateId(),
-        role: 'assistant',
-        content: `错误: ${result.error}`,
-        timestamp: Date.now(),
-      };
-      addChatMessage(errorMessage);
     }
 
     set({ isLoading: false });

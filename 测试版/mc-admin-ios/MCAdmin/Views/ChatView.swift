@@ -26,10 +26,15 @@ struct ChatView: View {
                                     .id(msg.id)
                                 }
 
-                                // AI思考中指示器
+                                // AI状态指示器
                                 if appState.isLoading {
-                                    ThinkingBubble()
-                                        .id("thinking")
+                                    if appState.isExecutingTool, let tool = appState.currentTool {
+                                        ToolExecutingBubble(tool: tool)
+                                            .id("tool-exec")
+                                    } else if appState.isThinking {
+                                        ThinkingBubble()
+                                            .id("thinking")
+                                    }
                                 }
                             }
                             .padding()
@@ -44,6 +49,11 @@ struct ChatView: View {
                                 withAnimation { proxy.scrollTo("thinking", anchor: .bottom) }
                             }
                         }
+                        .onChange(of: appState.isExecutingTool) {
+                            if appState.isExecutingTool {
+                                withAnimation { proxy.scrollTo("tool-exec", anchor: .bottom) }
+                            }
+                        }
                     }
 
                     // 输入框
@@ -52,6 +62,15 @@ struct ChatView: View {
             }
             .navigationTitle("AI 助手")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        Task { await appState.clearConversation() }
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                    }
+                }
+            }
         }
     }
 
@@ -321,6 +340,72 @@ struct ReviewCard: View {
     private func stopCountdown() {
         countdownTimer?.invalidate()
         countdownTimer = nil
+    }
+}
+
+// MARK: - 工具执行中指示器
+
+struct ToolExecutingBubble: View {
+    let tool: ToolExecutingStatus
+
+    @State private var animating = false
+
+    var body: some View {
+        HStack {
+            HStack(spacing: 8) {
+                Image(systemName: toolIcon)
+                    .font(.caption)
+                    .foregroundStyle(Theme.primary)
+                    .rotationEffect(.degrees(animating ? 360 : 0))
+                    .animation(
+                        .linear(duration: 2).repeatForever(autoreverses: false),
+                        value: animating
+                    )
+
+                Text(tool.label)
+                    .font(.caption)
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineLimit(1)
+
+                // 进度点
+                HStack(spacing: 3) {
+                    ForEach(0..<3, id: \.self) { i in
+                        Circle()
+                            .fill(Theme.primary)
+                            .frame(width: 5, height: 5)
+                            .scaleEffect(animating ? 1.2 : 0.6)
+                            .opacity(animating ? 1.0 : 0.3)
+                            .animation(
+                                .easeInOut(duration: 0.6)
+                                    .repeatForever(autoreverses: true)
+                                    .delay(Double(i) * 0.2),
+                                value: animating
+                            )
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Theme.primary.opacity(0.1))
+            .cornerRadius(16)
+
+            Spacer(minLength: 60)
+        }
+        .onAppear { animating = true }
+    }
+
+    private var toolIcon: String {
+        switch tool.tool {
+        case "read_url": return "globe"
+        case "read_log": return "doc.text.magnifyingglass"
+        case "execute_command": return "terminal"
+        case "get_status": return "antenna.radiowaves.left.and.right"
+        case "restart_server": return "arrow.triangle.2.circlepath"
+        case "kick_player": return "person.fill.xmark"
+        case "op_player": return "person.fill.badge.plus"
+        case "broadcast": return "megaphone"
+        default: return "wrench"
+        }
     }
 }
 

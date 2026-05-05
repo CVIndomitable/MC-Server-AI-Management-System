@@ -9,6 +9,7 @@ struct ArchiveView: View {
     @State private var total: Int = 0
     @State private var loading = false
     @State private var errorMessage: String?
+    @State private var showError = false
 
     var body: some View {
         NavigationStack {
@@ -48,7 +49,10 @@ struct ArchiveView: View {
             .navigationBarTitleDisplayMode(.inline)
             .refreshable { await refresh() }
             .task { await refresh() }
-            .alert("错误", isPresented: .constant(errorMessage != nil)) {
+            .onChange(of: errorMessage) { _, newValue in
+                showError = newValue != nil
+            }
+            .alert("错误", isPresented: $showError) {
                 Button("好") { errorMessage = nil }
             } message: {
                 Text(errorMessage ?? "")

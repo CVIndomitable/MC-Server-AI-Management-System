@@ -5,7 +5,7 @@ import Foundation
 actor APIClient {
     static let shared = APIClient()
 
-    private let baseURL = "http://47.113.221.26/mc-admin-dev"
+    let baseURL = "http://47.113.221.26/mc-admin-dev"
     private let session: URLSession
 
     private init() {
@@ -136,6 +136,11 @@ actor APIClient {
     func confirmCommand(pendingId: String, action: String) async throws -> ConfirmResponse {
         try await request("POST", path: "/api/v1/chat/confirm/\(pendingId)",
                           query: ["action": action])
+    }
+
+    func clearConversation(serverId: String) async throws -> MessageResponse {
+        try await request("POST", path: "/api/v1/chat/clear",
+                          query: ["server_id": serverId])
     }
 
     // MARK: - Server API

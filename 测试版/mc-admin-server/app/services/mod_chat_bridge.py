@@ -13,6 +13,7 @@ from datetime import datetime
 from app.websocket.manager import manager
 from app.services.ai_agent import ai_agent
 from app.services.command_reviewer import command_reviewer
+from app.services.spark_archive import capture_execute_command
 from app.models.review import ReviewDecision
 
 logger = logging.getLogger(__name__)
@@ -101,6 +102,11 @@ async def handle_ai_chat_request(server_id: str, message: dict):
             try:
                 result = await _execute_tool(server_id, tn, ti, current_status)
                 ai_agent.add_tool_result(admin_id, server_id, tc_id, result.get("output", ""))
+                if tn == "execute_command":
+                    await capture_execute_command(
+                        admin_id, server_id,
+                        ti.get("command", ""), result,
+                    )
                 executed_any = True
             except Exception as e:
                 logger.error(f"mod_chat 工具执行失败: {e}")

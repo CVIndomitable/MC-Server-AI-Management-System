@@ -111,6 +111,27 @@ class UserDatabase:
                 "CREATE INDEX IF NOT EXISTS idx_spark_server_time "
                 "ON spark_profiles(server_id, started_at DESC)"
             )
+            # 聊天日志：完整记录用户↔AI对话，用于调试和问题排查
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS chat_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    admin_id TEXT NOT NULL,
+                    server_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT,
+                    tool_calls_json TEXT,
+                    tool_results_json TEXT,
+                    model_used TEXT,
+                    provider_used TEXT,
+                    error TEXT,
+                    cache_hit INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL
+                )
+            """)
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_chat_logs_admin_server "
+                "ON chat_logs(admin_id, server_id, created_at DESC)"
+            )
             await db.commit()
         logger.info(f"数据库已初始化: {self.db_path}")
 
@@ -690,6 +711,76 @@ class UserDatabase:
             )
             await db.commit()
             return cursor.rowcount > 0
+
+    # ======== 聊天日志 ========
+
+    async def log_chat(
+        self, admin_id: str, server_id: str, role: str,
+        content: str = None, tool_calls_json: str = None,
+        tool_results_json: str = None, model_used: str = None,
+        provider_used: str = None, error: str = None,
+        cache_hit: bool = False,
+    ):
+        """写入一条聊天日志。失败不抛异常，仅打 warning（不影响主流程）。"""
+        try:
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    """INSERT INTO chat_logs
+                       (admin_id, server_id, role, content, tool_calls_json,
+                        tool_results_json, model_used, provider_used, error,
+                        cache_hit, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        admin_id, server_id, role, content,
+                        tool_calls_json, tool_results_json,
+                        model_used, provider_used, error,
+                        1 if cache_hit else 0,
+                        datetime.now(timezone.utc).isoformat(),
+                    ),
+                )
+                await db.commit()
+        except Exception as e:
+            logger.warning(f"聊天日志写入失败: {e}")
+
+    async def list_chat_logs(
+        self, admin_id: str = None, server_id: str = None,
+        limit: int = 100, offset: int = 0,
+    ) -> list[dict]:
+        """查询聊天日志，按时间倒序。可按 admin/server 过滤。"""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            conditions = []
+            params = []
+            if admin_id:
+                conditions.append("admin_id = ?")
+                params.append(admin_id)
+            if server_id:
+                conditions.append("server_id = ?")
+                params.append(server_id)
+            where = "WHERE " + " AND ".join(conditions) if conditions else ""
+            async with db.execute(
+                f"SELECT * FROM chat_logs {where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                params + [limit, offset],
+            ) as cursor:
+                return [dict(row) for row in await cursor.fetchall()]
+
+    async def count_chat_logs(self, admin_id: str = None, server_id: str = None) -> int:
+        """聊天日志总数，用于分页。"""
+        async with aiosqlite.connect(self.db_path) as db:
+            conditions = []
+            params = []
+            if admin_id:
+                conditions.append("admin_id = ?")
+                params.append(admin_id)
+            if server_id:
+                conditions.append("server_id = ?")
+                params.append(server_id)
+            where = "WHERE " + " AND ".join(conditions) if conditions else ""
+            async with db.execute(
+                f"SELECT COUNT(*) FROM chat_logs {where}", params
+            ) as cursor:
+                row = await cursor.fetchone()
+                return row[0] if row else 0
 
 
 user_db = UserDatabase()
